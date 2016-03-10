@@ -1,0 +1,120 @@
+#!/bin/bash
+
+KAMAILIO_LOG_LEVEL=${KAMAILIO_LOG_LEVEL:-info}
+
+ERLANG_NODE=${ERLANG_NODE:-kamailio}
+
+KAMAILIO_BIND_INTERFACE=${KAMAILIO_BIND_INTERFACE:-eth0}
+INTERFACE_LOOKUP=$(ifconfig $KAMAILIO_BIND_INTERFACE | grep 'inet addr:' | cut -d: -f2 | cut -d' ' -f1)
+KAMAILIO_BIND_ADDR=${KAMAILIO_BIND_ADDR:-$INTERFACE_LOOKUP}
+KAMAILIO_WEBSOCKET_DOMAIN=${KAMAILIO_WEBSOCKET_DOMAIN:-sip.li}
+
+KAMAILIO_DAEMONIZE_OPTS=${KAMAILIO_DAEMONIZE_OPTS:--DD}
+KAMAILIO_USER=${KAMAILIO_USER:-kamailio}
+KAMAILIO_GROUP=${KAMAILIO_GROUP:-kamailio}
+KAMAILIO_SHM_MEMORY=${KAMAILIO_SHM_MEMORY:-64}
+KAMAILIO_PKG_MEMORY=${KAMAILIO_PKG_MEMORY:-4}
+KAMAILIO_DUMP_CORE=${KAMAILIO_DUMP_CORE:-no}
+KAMAILIO_PID_FILE='/var/run/kamailio/kamailio.pid'
+
+# Die on error
+set -e
+
+# FUNCTIONS
+
+get_etcd_host() {
+    local HOST=$(dig +short +search etcd-client)
+    echo -n $HOST
+}
+
+get_etcd_port() {
+    local PORT=$(dig +short +search SRV _etcd-client-port._tcp.etcd-client | awk '{print $3}')
+    echo -n $PORT
+}
+
+# args: 1=service
+get_endpoint_ips() {
+    local SERVICE=$1
+    local TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+    local HOST=$(dig +short +search kubernetes)
+    local ENDPOINTS=$(curl -sSL -k -H "Authorization: Bearer $TOKEN" https://$HOST/api/v1/endpoints | jq -r ".items[] | select(.metadata.name == \"${SERVICE}\") | .subsets[] | .addresses[] | .ip")
+    echo -e "$ENDPOINTS"
+}
+
+
+echo "Setting Kamailio Loglevel ..."
+if [ $KAMAILIO_LOG_LEVEL == 'DEBUG' ]; then
+    LOGLEVEL='DBG'
+else
+    LOGLEVEL=$KAMAILIO_LOG_LEVEL
+fi
+KAMAILIO_LOG_LEVEL_SYM="L_${KAMAILIO_LOG_LEVEL}"
+sed -i.bak "s/^debug = \(.*\)$/debug = ${KAMAILIO_LOG_LEVEL_SYM}/" /etc/kazoo/kamailio/local.cfg
+echo "Loglevel set to: $LOGLEVEL"
+
+
+if [ -n "$KUBERNETES_HOSTNAME_FIX" ]; then
+    echo "Applying kubernetes hostname fix"
+    ln -sf /var/lib/kamailio/bin/hostname-fix /var/lib/kamailio/bin/hostname
+    chown kamailio:kamailio /var/lib/kamailio/bin/hostname
+    export HOSTNAME=$(/var/lib/kamailio/bin/hostname-fix)
+    echo "127.0.0.1    $HOSTNAME" >> /etc/hosts
+fi
+
+
+echo "Getting RabbitMQ ServiceIP ..."
+AMQP_HOST=$(dig +short +search rabbitmq)
+AMQP_PORT=$(dig +short +search SRV _amqp._tcp.rabbitmq | awk '{print $3}')
+AMQP_URL="kazoo:\/\/guest:guest@${AMQP_HOST}:${AMQP_PORT}"
+
+
+echo "Getting Network ..."
+KAMAILIO_HOST=$(/var/lib/kamailio/bin/hostname-fix -f)
+KAMAILIO_ADDR=$(hostname -i)
+
+
+echo "Getting Freeswitch Endpoints ..."
+# KUBERNETES_HOST=$(dig +short +search kubernetes)
+# AUTH_TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+# curl -H "Authorization: Bearer $AUTH_TOKEN" https://$KUBERNETES_HOST/api/v1/endpoints
+# curl -sSL -k -H "Authorization: Bearer $AUTH_TOKEN" https://$KUBERNETES_HOST/api/v1/endpoints | jq -r ' .items[] | select(.metadata.name == "freeswitch") | .subsets[] | .addresses[] | .ip'
+FREESWITCH_NODES=$(get_endpoint_ips 'freeswitch')
+
+
+echo "Rewriting Kamailio Configuration ..."
+sed -ir "s/^\(#!substdef \"!MY_HOSTNAME!\)\(.*\)\(!g\"\)/\1${KAMAILIO_HOST}\3/" /etc/kazoo/kamailio/local.cfg
+sed -ir "s/^\(#!substdef \"!MY_IP_ADDRESS!\)\(.*\)\(!g\"\)/\1${KAMAILIO_BIND_ADDR}\3/" /etc/kazoo/kamailio/local.cfg
+sed -ir "s/^\(#!substdef \"!MY_AMQP_URL!\)\(.*\)\(!g\"\)/\1${AMQP_URL}\3/" /etc/kazoo/kamailio/local.cfg
+sed -ir "s/^\(#!substdef \"!MY_WEBSOCKET_DOMAIN!\)\(.*\)\(!g\"\)/\1${KAMAILIO_WEBSOCKET_DOMAIN}\3/" /etc/kazoo/kamailio/local.cfg
+cat /etc/kazoo/kamailio/local.cfg
+
+
+echo "Writing Dispatcher Configuration ..."
+cat <<EOF > /etc/kazoo/kamailio/dbtext/dispatcher
+    ### Dispatcher Set IDs:
+    ### 1 - Primary media servers
+    ### 2 - Backup media servers
+    ### 3 - Alternate media server IPs (used only for classification)
+    ### 10 - Presence servers (if not locally handled)
+    ### 20 - Registrar servers (if not locally handled)
+
+    # setid(integer) destination(sip uri) flags (integer, optional)
+EOF
+
+node_num=1
+for node in "${FREESWITCH_NODES[@]}"; do
+    echo "1 sip:${node}:11000 $node_num" >> /etc/kazoo/kamailio/dbtext/dispatcher
+    ((node_num++))
+done  
+cat /etc/kazoo/kamailio/dbtext/dispatcher
+
+
+echo "Ensuring Permissions"
+chown -R kamailio:kamailio /var/lib/kamailio /etc/kazoo/kamailio
+
+
+echo "Starting kamailio ..."
+cd ~
+    # tail -f /dev/null
+    su kamailio -c "exec kamailio $KAMAILIO_DAEMONIZE_OPTS -P $KAMAILIO_PID_FILE -m $KAMAILIO_SHM_MEMORY -M $KAMAILIO_PKG_MEMORY -u $KAMAILIO_USER -g $KAMAILIO_GROUP" 
+    
