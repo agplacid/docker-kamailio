@@ -1,0 +1,31 @@
+kind: Service
+apiVersion: v1
+metadata: 
+  name: kamailio
+  labels:
+    app: kamailio
+    role: sip-proxy
+spec:
+  selector:
+    app: kamailio
+    project: valuphone
+  type: NodePort
+  ports:
+    - name: sip-tcp
+      protocol: TCP
+      port: 5060
+    - name: sip-udp
+      protocol: UDP
+      port: 5060
+    - name: sip-tls
+      protocol: TCP
+      port: 5061
+    - name: alg-tcp
+      protocol: TCP
+      port: 7000
+    - name: alg-udp
+      protocol: UDP
+      port: 7000
+    - name: alg-tls
+      protocol: TCP
+      port: 7001   
