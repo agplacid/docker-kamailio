@@ -38,7 +38,7 @@ get_endpoint_ips() {
     local TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
     local HOST=$(dig +short +search kubernetes)
     local ENDPOINTS=$(curl -sSL -k -H "Authorization: Bearer $TOKEN" https://$HOST/api/v1/endpoints | jq -r ".items[] | select(.metadata.name == \"${SERVICE}\") | .subsets[] | .addresses[] | .ip")
-    echo -e "$ENDPOINTS"
+    echo "$ENDPOINTS"
 }
 
 
@@ -49,7 +49,7 @@ else
     LOGLEVEL=$(echo $KAMAILIO_LOG_LEVEL | awk '{print toupper($0)}')
 fi
 
-KAMAILIO_LOG_LEVEL_SYM="L_${KAMAILIO_LOG_LEVEL}"
+KAMAILIO_LOG_LEVEL_SYM="L_${LOGLEVEL}"
 sed -ir "s/^debug = \(.*\)$/debug = ${KAMAILIO_LOG_LEVEL_SYM}/" /etc/kazoo/kamailio/local.cfg
 echo "Loglevel set to: $LOGLEVEL"
 
@@ -118,5 +118,5 @@ chown -R kamailio:kamailio /var/lib/kamailio /etc/kazoo/kamailio
 echo "Starting kamailio ..."
 cd ~
     # tail -f /dev/null
-    su kamailio -c "exec kamailio $KAMAILIO_DAEMONIZE_OPTS -P $KAMAILIO_PID_FILE -m $KAMAILIO_SHM_MEMORY -M $KAMAILIO_PKG_MEMORY -u $KAMAILIO_USER -g $KAMAILIO_GROUP" 
+    exec "kamailio $KAMAILIO_DAEMONIZE_OPTS -P $KAMAILIO_PID_FILE -m $KAMAILIO_SHM_MEMORY -M $KAMAILIO_PKG_MEMORY -u $KAMAILIO_USER -g $KAMAILIO_GROUP"
     

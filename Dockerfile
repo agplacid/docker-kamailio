@@ -34,5 +34,4 @@ EXPOSE  7000 7000/udp 7001
 
 WORKDIR /var/lib/kamailio
 
-# CMD     ["/usr/bin/entrypoint"]
-CMD     ["tail", "-f", "/dev/null"]
+CMD     ["/usr/bin/entrypoint"]
