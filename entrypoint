@@ -118,5 +118,5 @@ chown -R kamailio:kamailio /var/lib/kamailio /etc/kazoo/kamailio
 echo "Starting kamailio ..."
 cd ~
     # tail -f /dev/null
-    exec "kamailio $KAMAILIO_DAEMONIZE_OPTS -P $KAMAILIO_PID_FILE -m $KAMAILIO_SHM_MEMORY -M $KAMAILIO_PKG_MEMORY -u $KAMAILIO_USER -g $KAMAILIO_GROUP"
+    exec /usr/sbin/kamailio $KAMAILIO_DAEMONIZE_OPTS -P $KAMAILIO_PID_FILE -m $KAMAILIO_SHM_MEMORY -M $KAMAILIO_PKG_MEMORY -u $KAMAILIO_USER -g $KAMAILIO_GROUP
     
