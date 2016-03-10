@@ -46,10 +46,11 @@ echo "Setting Kamailio Loglevel ..."
 if [ $KAMAILIO_LOG_LEVEL == 'DEBUG' ]; then
     LOGLEVEL='DBG'
 else
-    LOGLEVEL=$KAMAILIO_LOG_LEVEL
+    LOGLEVEL=$(echo $KAMAILIO_LOG_LEVEL | awk '{print toupper($0)}')
 fi
+
 KAMAILIO_LOG_LEVEL_SYM="L_${KAMAILIO_LOG_LEVEL}"
-sed -i.bak "s/^debug = \(.*\)$/debug = ${KAMAILIO_LOG_LEVEL_SYM}/" /etc/kazoo/kamailio/local.cfg
+sed -ir "s/^debug = \(.*\)$/debug = ${KAMAILIO_LOG_LEVEL_SYM}/" /etc/kazoo/kamailio/local.cfg
 echo "Loglevel set to: $LOGLEVEL"
 
 
@@ -91,18 +92,19 @@ cat /etc/kazoo/kamailio/local.cfg
 
 echo "Writing Dispatcher Configuration ..."
 cat <<EOF > /etc/kazoo/kamailio/dbtext/dispatcher
-    ### Dispatcher Set IDs:
-    ### 1 - Primary media servers
-    ### 2 - Backup media servers
-    ### 3 - Alternate media server IPs (used only for classification)
-    ### 10 - Presence servers (if not locally handled)
-    ### 20 - Registrar servers (if not locally handled)
+### Dispatcher Set IDs:
+### 1 - Primary media servers
+### 2 - Backup media servers
+### 3 - Alternate media server IPs (used only for classification)
+### 10 - Presence servers (if not locally handled)
+### 20 - Registrar servers (if not locally handled)
 
-    # setid(integer) destination(sip uri) flags (integer, optional)
+# setid(integer) destination(sip uri) flags (integer, optional)
 EOF
 
 node_num=1
-for node in "${FREESWITCH_NODES[@]}"; do
+arr=(`echo ${FREESWITCH_NODES}`)
+for node in "${arr[@]}"; do
     echo "1 sip:${node}:11000 $node_num" >> /etc/kazoo/kamailio/dbtext/dispatcher
     ((node_num++))
 done  
