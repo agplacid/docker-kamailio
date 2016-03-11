@@ -20,7 +20,8 @@ COPY    entrypoint /usr/bin/entrypoint
 
 ENV     KUBERNETES_HOSTNAME_FIX=true \
         HOME=/var/lib/kamailio \
-        PATH=$HOME:$HOME/bin:$PATH
+        PATH=$HOME:$HOME/bin:$PATH \
+        KAMAILIO_USE_LONGNAME=true
 
 VOLUME  ["/var/lib/kamailio"]
 

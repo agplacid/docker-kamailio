@@ -73,6 +73,21 @@ EOF
 chmod +x /var/lib/kamailio/bin/hostname-fix
 
 
+echo "Writing .bashrc ..."
+tee ~/.bashrc <<'EOF'
+#!/bin/bash
+
+if [ "$KUBERNETES_HOSTNAME_FIX" == true ]; then
+    if [ "$KAMAILIO_USE_LONGNAME" == true ]; then
+        export HOSTNAME=$(hostname -f)
+    else
+        export HOSTNAME=$(hostname)
+    fi
+fi
+EOF
+chown kamailio:kamailio ~/.bashrc
+
+
 echo "Setting Ownership & Permissions ..."
 
 # /etc/kamailio

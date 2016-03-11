@@ -41,6 +41,14 @@ get_endpoint_ips() {
     echo "$ENDPOINTS"
 }
 
+get_amqp_uri() {
+    echo "Getting RabbitMQ ServiceIP ..."
+    local AMQP_HOST=$(dig +short +search rabbitmq)
+    local AMQP_PORT=$(dig +short +search SRV _amqp._tcp.rabbitmq | awk '{print $3}')
+    AMQP_URI="kazoo:\/\/guest:guest@${AMQP_HOST}:${AMQP_PORT}"
+}
+
+
 
 echo "Setting Kamailio Loglevel ..."
 if [ $KAMAILIO_LOG_LEVEL == 'DEBUG' ]; then
@@ -63,10 +71,13 @@ if [ -n "$KUBERNETES_HOSTNAME_FIX" ]; then
 fi
 
 
-echo "Getting RabbitMQ ServiceIP ..."
-AMQP_HOST=$(dig +short +search rabbitmq)
-AMQP_PORT=$(dig +short +search SRV _amqp._tcp.rabbitmq | awk '{print $3}')
-AMQP_URL="kazoo:\/\/guest:guest@${AMQP_HOST}:${AMQP_PORT}"
+# get AMQP_URI
+get_amqp_uri
+
+# echo "Getting RabbitMQ ServiceIP ..."
+# AMQP_HOST=$(dig +short +search rabbitmq)
+# AMQP_PORT=$(dig +short +search SRV _amqp._tcp.rabbitmq | awk '{print $3}')
+# AMQP_URL="kazoo:\/\/guest:guest@${AMQP_HOST}:${AMQP_PORT}"
 
 
 echo "Getting Network ..."
@@ -85,7 +96,7 @@ FREESWITCH_NODES=$(get_endpoint_ips 'freeswitch')
 echo "Rewriting Kamailio Configuration ..."
 sed -ir "s/^\(#!substdef \"!MY_HOSTNAME!\)\(.*\)\(!g\"\)/\1${KAMAILIO_HOST}\3/" /etc/kazoo/kamailio/local.cfg
 sed -ir "s/^\(#!substdef \"!MY_IP_ADDRESS!\)\(.*\)\(!g\"\)/\1${KAMAILIO_BIND_ADDR}\3/" /etc/kazoo/kamailio/local.cfg
-sed -ir "s/^\(#!substdef \"!MY_AMQP_URL!\)\(.*\)\(!g\"\)/\1${AMQP_URL}\3/" /etc/kazoo/kamailio/local.cfg
+sed -ir "s/^\(#!substdef \"!MY_AMQP_URL!\)\(.*\)\(!g\"\)/\1${AMQP_URI}\3/" /etc/kazoo/kamailio/local.cfg
 sed -ir "s/^\(#!substdef \"!MY_WEBSOCKET_DOMAIN!\)\(.*\)\(!g\"\)/\1${KAMAILIO_WEBSOCKET_DOMAIN}\3/" /etc/kazoo/kamailio/local.cfg
 cat /etc/kazoo/kamailio/local.cfg
 
