@@ -48,6 +48,19 @@ get_amqp_uri() {
     AMQP_URI="kazoo:\/\/guest:guest@${AMQP_HOST}:${AMQP_PORT}"
 }
 
+get_amqp_uri_nethost() {
+    local HOST=$RABBITMQ_SERVICE_HOST
+    local PORT=$RABBITMQ_SERVICE_PORT_AMQP
+    AMQP_URI="kazoo:\/\/guest:guest@${HOST}:${PORT}"
+}
+get_endpoint_ips_nethost() {
+    local SERVICE=$1
+    local TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+    local HOST=$KUBERNETES_SERVICE_HOST
+    local ENDPOINTS=$(curl -sSL -k -H "Authorization: Bearer $TOKEN" https://$HOST/api/v1/endpoints | jq -r ".items[] | select(.metadata.name == \"${SERVICE}\") | .subsets[] | .addresses[] | .ip")
+    echo "$ENDPOINTS"
+}
+
 
 
 echo "Setting Kamailio Loglevel ..."
@@ -71,8 +84,13 @@ if [ -n "$KUBERNETES_HOSTNAME_FIX" ]; then
 fi
 
 
-# get AMQP_URI
-get_amqp_uri
+# get AMQP_Uget_amqp_uriRI
+if [ "$HOST_NETWORK" == true ]; then
+    get_amqp_uri_nethost
+else
+    get_amqp_uri
+fi
+
 
 # echo "Getting RabbitMQ ServiceIP ..."
 # AMQP_HOST=$(dig +short +search rabbitmq)
@@ -81,7 +99,14 @@ get_amqp_uri
 
 
 echo "Getting Network ..."
-KAMAILIO_HOST=$(/var/lib/kamailio/bin/hostname-fix -f)
+
+if [ "$HOST_NETWORK" == true ]; then
+    KAMAILIO_HOST=$(/bin/hostname -f)
+else
+    KAMAILIO_HOST=$(/var/lib/kamailio/bin/hostname-fix -f)
+fi
+
+# KAMAILIO_HOST=$(/var/lib/kamailio/bin/hostname-fix -f)
 KAMAILIO_ADDR=$(hostname -i)
 
 
@@ -90,7 +115,14 @@ echo "Getting Freeswitch Endpoints ..."
 # AUTH_TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
 # curl -H "Authorization: Bearer $AUTH_TOKEN" https://$KUBERNETES_HOST/api/v1/endpoints
 # curl -sSL -k -H "Authorization: Bearer $AUTH_TOKEN" https://$KUBERNETES_HOST/api/v1/endpoints | jq -r ' .items[] | select(.metadata.name == "freeswitch") | .subsets[] | .addresses[] | .ip'
-FREESWITCH_NODES=$(get_endpoint_ips 'freeswitch')
+
+if [ "$HOST_NETWORK" == true ]; then
+    FREESWITCH_NODES=$(get_endpoint_ips_nethost 'freeswitch')
+else
+    FREESWITCH_NODES=$(get_endpoint_ips 'freeswitch')
+fi
+
+# FREESWITCH_NODES=$(get_endpoint_ips 'freeswitch')
 
 
 echo "Rewriting Kamailio Configuration ..."
