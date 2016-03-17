@@ -14,7 +14,10 @@ spec:
   containers:
     - name: kamailio
       image: callforamerica/kamailio
-      args: ["tail", "-f", "/dev/null"]
+      # args: ["tail", "-f", "/dev/null"]
+      env:
+        - name: HOST_NETWORK
+          value: 'true'
       imagePullPolicy: Always
       volumeMounts:
         - name: erlang-cookie-secret

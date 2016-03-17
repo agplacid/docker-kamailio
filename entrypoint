@@ -4,9 +4,9 @@ KAMAILIO_LOG_LEVEL=${KAMAILIO_LOG_LEVEL:-info}
 
 ERLANG_NODE=${ERLANG_NODE:-kamailio}
 
-KAMAILIO_BIND_INTERFACE=${KAMAILIO_BIND_INTERFACE:-eth0}
-INTERFACE_LOOKUP=$(ifconfig $KAMAILIO_BIND_INTERFACE | grep 'inet addr:' | cut -d: -f2 | cut -d' ' -f1)
-KAMAILIO_BIND_ADDR=${KAMAILIO_BIND_ADDR:-$INTERFACE_LOOKUP}
+# KAMAILIO_BIND_INTERFACE=${KAMAILIO_BIND_INTERFACE:-eth0}
+# INTERFACE_LOOKUP=$(ifconfig $KAMAILIO_BIND_INTERFACE | grep 'inet addr:' | cut -d: -f2 | cut -d' ' -f1)
+# KAMAILIO_BIND_ADDR=${KAMAILIO_BIND_ADDR:-$INTERFACE_LOOKUP}
 KAMAILIO_WEBSOCKET_DOMAIN=${KAMAILIO_WEBSOCKET_DOMAIN:-sip.li}
 
 KAMAILIO_DAEMONIZE_OPTS=${KAMAILIO_DAEMONIZE_OPTS:--DD}
@@ -107,7 +107,7 @@ else
 fi
 
 # KAMAILIO_HOST=$(/var/lib/kamailio/bin/hostname-fix -f)
-KAMAILIO_ADDR=$(hostname -i)
+KAMAILIO_ADDR=$(/bin/hostname -i)
 
 
 echo "Getting Freeswitch Endpoints ..."
@@ -127,7 +127,7 @@ fi
 
 echo "Rewriting Kamailio Configuration ..."
 sed -ir "s/^\(#!substdef \"!MY_HOSTNAME!\)\(.*\)\(!g\"\)/\1${KAMAILIO_HOST}\3/" /etc/kazoo/kamailio/local.cfg
-sed -ir "s/^\(#!substdef \"!MY_IP_ADDRESS!\)\(.*\)\(!g\"\)/\1${KAMAILIO_BIND_ADDR}\3/" /etc/kazoo/kamailio/local.cfg
+sed -ir "s/^\(#!substdef \"!MY_IP_ADDRESS!\)\(.*\)\(!g\"\)/\1${KAMAILIO_ADDR}\3/" /etc/kazoo/kamailio/local.cfg
 sed -ir "s/^\(#!substdef \"!MY_AMQP_URL!\)\(.*\)\(!g\"\)/\1${AMQP_URI}\3/" /etc/kazoo/kamailio/local.cfg
 sed -ir "s/^\(#!substdef \"!MY_WEBSOCKET_DOMAIN!\)\(.*\)\(!g\"\)/\1${KAMAILIO_WEBSOCKET_DOMAIN}\3/" /etc/kazoo/kamailio/local.cfg
 cat /etc/kazoo/kamailio/local.cfg
