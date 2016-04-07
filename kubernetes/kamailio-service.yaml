@@ -8,7 +8,7 @@ metadata:
 spec:
   selector:
     app: kamailio
-    project: valuphone
+    # project: valuphone
   type: NodePort
   clusterIP: None
   ports:
@@ -18,8 +18,8 @@ spec:
     #   nodePort: 5060
     - name: sip-udp
       protocol: UDP
-      port: 5060
-      nodePort: 5060
+      port: 7000
+      # nodePort: 5060
     # - name: sip-tls
     #   protocol: TCP
     #   port: 5061

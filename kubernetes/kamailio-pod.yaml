@@ -14,7 +14,6 @@ spec:
   containers:
     - name: kamailio
       image: callforamerica/kamailio
-      # args: ["tail", "-f", "/dev/null"]
       env:
         - name: HOST_NETWORK
           value: 'true'
@@ -23,25 +22,42 @@ spec:
         - name: erlang-cookie-secret
           readOnly: true
           mountPath: /etc/secrets/erlang
-      # ports:
-      #   - name: sip-tcp
-      #     protocol: TCP
-      #     containerPort: 5060
-      #   - name: sip-udp
-      #     protocol: UDP
-      #     containerPort: 5060
-      #   - name: sip-tls
-      #     protocol: TCP
-      #     containerPort: 5061
-      #   - name: alg-tcp
-      #     protocol: TCP
-      #     containerPort: 7000
-      #   - name: alg-udp
-      #     protocol: UDP
-      #     containerPort: 7000
-      #   - name: alg-tls
-      #     protocol: TCP
-      #     containerPort: 7001        
-    - name: dns
-      image: callforamerica/go-dnsmasq
+      ports:
+        - name: sip-tcp
+          protocol: TCP
+          containerPort: 5060
+        - name: sip-udp
+          protocol: UDP
+          containerPort: 5060
+        - name: sip-tls
+          protocol: TCP
+          containerPort: 5061
+        - name: alg-tcp
+          protocol: TCP
+          containerPort: 7000
+        - name: alg-udp
+          protocol: UDP
+          containerPort: 7000
+        - name: alg-tls
+          protocol: TCP
+          containerPort: 7001   
+      resources:
+        requests:
+          cpu: 2
+          memory: 2G
+        # limits:
+        #   cpu: 
+        #   memory: 
+      readinessProbe:
+        exec:
+          command: ["kamctl", "monitor", "1", "|", "grep -q", "^Up"]
+        initialDelaySeconds: 20
+        timeoutSeconds: 5
+      livenessProbe:
+        exec:
+          command: ["kamctl", "monitor", "1", "|", "grep -q", "^Up"]
+        initialDelaySeconds: 20
+        timeoutSeconds: 5
+    # - name: dns
+    #   image: callforamerica/go-dnsmasq
   restartPolicy: Always
