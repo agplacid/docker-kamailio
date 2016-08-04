@@ -27,6 +27,8 @@ yum -y update
 yum -y install bind-utils
 yum -y install kazoo-kamailio
 
+yum -y upgrade nss curl
+
 echo "Installing JQ ..."
 curl -o /usr/local/bin/jq -sSL https://github.com/stedolan/jq/releases/download/jq-1.5/jq-linux64
 chmod +x /usr/local/bin/jq

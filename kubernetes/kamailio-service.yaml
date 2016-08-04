@@ -8,8 +8,8 @@ metadata:
 spec:
   selector:
     app: kamailio
-    # project: valuphone
-  type: NodePort
+    project: valuphone
+  type: ClusterIP
   clusterIP: None
   ports:
     # - name: sip-tcp

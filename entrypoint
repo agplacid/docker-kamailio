@@ -44,7 +44,9 @@ get_endpoint_ips() {
 get_amqp_uri() {
     echo "Getting RabbitMQ ServiceIP ..."
     local AMQP_HOST=$(dig +short +search rabbitmq)
+    # local AMQP_HOST=$RABBITMQ_SERVICE_HOST
     local AMQP_PORT=$(dig +short +search SRV _amqp._tcp.rabbitmq | awk '{print $3}')
+    # local AMQP_PORT=$RABBITMQ_SERVICE_PORT
     AMQP_URI="kazoo:\/\/guest:guest@${AMQP_HOST}:${AMQP_PORT}"
 }
 
