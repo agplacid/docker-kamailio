@@ -48,10 +48,10 @@ run:
 	@docker run -it --rm --name $(NAME) -e "ENVIRONMENT=local" -e "KAMAILIO_LOG_LEVEL=debug" --network=local --entrypoint bash $(LOCAL_TAG)
 
 launch:
-	@docker run -d --name $(NAME) -e "ENVIRONMENT=local" -p "5060:5060" $(LOCAL_TAG)
+	@docker run -d --name $(NAME) -e "ENVIRONMENT=local" -p "5060:5060" -p "5064:5064" $(LOCAL_TAG)
 
 launch-net:
-	@docker run -d -h $(NAME) --name $(NAME) -e "ENVIRONMENT=local" -e "KAMAILIO_LOG_LEVEL=debug" --network=local $(LOCAL_TAG)
+	@docker run -d -h docker.local --name $(NAME) -e "ENVIRONMENT=local" -e "KAMAILIO_LOG_LEVEL=debug" -p "5060:5060" -p "5064:5064" --network=local $(LOCAL_TAG)
 
 launch-deps:
 	-cd ../docker-rabbitmq && make launch-net
