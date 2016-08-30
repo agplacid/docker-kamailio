@@ -1,167 +1,71 @@
 #!/bin/bash
 
-KAMAILIO_LOG_LEVEL=${KAMAILIO_LOG_LEVEL:-info}
-
-ERLANG_NODE=${ERLANG_NODE:-kamailio}
-
-# KAMAILIO_BIND_INTERFACE=${KAMAILIO_BIND_INTERFACE:-eth0}
-# INTERFACE_LOOKUP=$(ifconfig $KAMAILIO_BIND_INTERFACE | grep 'inet addr:' | cut -d: -f2 | cut -d' ' -f1)
-# KAMAILIO_BIND_ADDR=${KAMAILIO_BIND_ADDR:-$INTERFACE_LOOKUP}
-KAMAILIO_WEBSOCKET_DOMAIN=${KAMAILIO_WEBSOCKET_DOMAIN:-sip.li}
-
-KAMAILIO_DAEMONIZE_OPTS=${KAMAILIO_DAEMONIZE_OPTS:--DD}
-KAMAILIO_USER=${KAMAILIO_USER:-kamailio}
-KAMAILIO_GROUP=${KAMAILIO_GROUP:-kamailio}
-KAMAILIO_SHM_MEMORY=${KAMAILIO_SHM_MEMORY:-64}
-KAMAILIO_PKG_MEMORY=${KAMAILIO_PKG_MEMORY:-4}
-KAMAILIO_DUMP_CORE=${KAMAILIO_DUMP_CORE:-no}
-KAMAILIO_PID_FILE='/var/run/kamailio/kamailio.pid'
-
-# Die on error
 set -e
 
-# FUNCTIONS
+. ~/.bashrc
 
-get_etcd_host() {
-    local HOST=$(dig +short +search etcd-client)
-    echo -n $HOST
-}
+# accepts: debug info notice warn error critical alert
+: ${KAMAILIO_LOG_LEVEL:=info}
+: ${KAMAILIO_LOG_COLOR:=true}
 
-get_etcd_port() {
-    local PORT=$(dig +short +search SRV _etcd-client-port._tcp.etcd-client | awk '{print $3}')
-    echo -n $PORT
-}
+: ${MY_HOSTNAME:=$(hostname -f)}
+: ${MY_IP_ADDRESS:=$(hostname -i | head -n 1)}
+: ${MY_AMQP_HOST:=rabbitmq}
+: ${MY_WEBSOCKET_DOMAIN:=sip.li}
 
-# args: 1=service
-get_endpoint_ips() {
-    local SERVICE=$1
-    local TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
-    local HOST=$(dig +short +search kubernetes)
-    local ENDPOINTS=$(curl -sSL -k -H "Authorization: Bearer $TOKEN" https://$HOST/api/v1/endpoints | jq -r ".items[] | select(.metadata.name == \"${SERVICE}\") | .subsets[] | .addresses[] | .ip")
-    echo "$ENDPOINTS"
-}
+: ${KAMAILIO_SHM_MEMORY:=128}
+: ${KAMAILIO_PKG_MEMORY:=4}
 
-get_amqp_uri() {
-    echo "Getting RabbitMQ ServiceIP ..."
-    local AMQP_HOST=$(dig +short +search rabbitmq)
-    # local AMQP_HOST=$RABBITMQ_SERVICE_HOST
-    local AMQP_PORT=$(dig +short +search SRV _amqp._tcp.rabbitmq | awk '{print $3}')
-    # local AMQP_PORT=$RABBITMQ_SERVICE_PORT
-    AMQP_URI="kazoo:\/\/guest:guest@${AMQP_HOST}:${AMQP_PORT}"
-}
+[ "$KAMAILIO_LOG_COLOR" == true ] && CLOG_ARGS='-e'
 
-get_amqp_uri_nethost() {
-    local HOST=$RABBITMQ_SERVICE_HOST
-    local PORT=$RABBITMQ_SERVICE_PORT_AMQP
-    AMQP_URI="kazoo:\/\/guest:guest@${HOST}:${PORT}"
-}
-get_endpoint_ips_nethost() {
-    local SERVICE=$1
-    local TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
-    local HOST=$KUBERNETES_SERVICE_HOST
-    local ENDPOINTS=$(curl -sSL -k -H "Authorization: Bearer $TOKEN" https://$HOST/api/v1/endpoints | jq -r ".items[] | select(.metadata.name == \"${SERVICE}\") | .subsets[] | .addresses[] | .ip")
-    echo "$ENDPOINTS"
-}
+declare -A LOG_LEVEL_MAP=( 
+    [debug]=L_DBG 
+    [info]=L_INFO 
+    [notice]=L_NOTICE 
+    [warn]=L_WARN
+    [error]=L_ERR 
+    [critical]=L_CRIT 
+    [alert]=L_ALERT )
 
 
-
-echo "Setting Kamailio Loglevel ..."
-if [ $KAMAILIO_LOG_LEVEL == 'DEBUG' ]; then
-    LOGLEVEL='DBG'
+echo "Setting environment specific services ..."
+if [ "$ENVIRONMENT" == "local" ]; then
+    FREESWITCH_NODES="freeswitch.default.pod.cluster.local"
 else
-    LOGLEVEL=$(echo $KAMAILIO_LOG_LEVEL | awk '{print toupper($0)}')
-fi
-
-KAMAILIO_LOG_LEVEL_SYM="L_${LOGLEVEL}"
-sed -ir "s/^debug = \(.*\)$/debug = ${KAMAILIO_LOG_LEVEL_SYM}/" /etc/kazoo/kamailio/local.cfg
-echo "Loglevel set to: $LOGLEVEL"
-
-
-if [ -n "$KUBERNETES_HOSTNAME_FIX" ]; then
-    echo "Applying kubernetes hostname fix"
-    ln -sf /var/lib/kamailio/bin/hostname-fix /var/lib/kamailio/bin/hostname
-    chown kamailio:kamailio /var/lib/kamailio/bin/hostname
-    export HOSTNAME=$(/var/lib/kamailio/bin/hostname-fix)
-    echo "127.0.0.1    $HOSTNAME" >> /etc/hosts
+    KUBERNETES_AUTH_TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+    FREESWITCH_NODES=$(curl -sSL -k -H "Authorization: Bearer $KUBERNETES_AUTH_TOKEN" https://$KUBERNETES_SERVICE_HOST/api/v1/endpoints | jq -r ".items[] | select(.metadata.name == \"freeswitch\") | .subsets[] | .addresses[] | .ip")
 fi
 
 
-# get AMQP_Uget_amqp_uriRI
-if [ "$HOST_NETWORK" == true ]; then
-    get_amqp_uri_nethost
-else
-    get_amqp_uri
-fi
+echo "Converting log level from $KAMAILIO_LOG_LEVEL ..."
+LOG_LEVEL="${LOG_LEVEL_MAP[$(echo "$KAMAILIO_LOG_LEVEL" | awk '{print tolower($0)}')]}"
 
+echo "Setting log level to: $LOG_LEVEL ..."
+sed -ir "/^debug/s/\(L_.*\)$/$LOG_LEVEL/" /etc/kazoo/kamailio/local.cfg
 
-# echo "Getting RabbitMQ ServiceIP ..."
-# AMQP_HOST=$(dig +short +search rabbitmq)
-# AMQP_PORT=$(dig +short +search SRV _amqp._tcp.rabbitmq | awk '{print $3}')
-# AMQP_URL="kazoo:\/\/guest:guest@${AMQP_HOST}:${AMQP_PORT}"
+echo "Rewriting kamailio local.cfg ..."
+sed -ir "/MY_HOSTNAME/s/kamailio\.2600hz\.com/$MY_HOSTNAME/" /etc/kazoo/kamailio/local.cfg
+sed -ir "/MY_IP_ADDRESS/s/127\.0\.0\.1/$MY_IP_ADDRESS/" /etc/kazoo/kamailio/local.cfg
+sed -ir "/MY_AMQP_URL/s/127\.0\.0\.1/$MY_AMQP_HOST/" /etc/kazoo/kamailio/local.cfg
+sed -ir "/MY_WEBSOCKET_DOMAIN/s/2600hz\.com/$MY_WEBSOCKET_DOMAIN/" /etc/kazoo/kamailio/local.cfg
 
-
-echo "Getting Network ..."
-
-if [ "$HOST_NETWORK" == true ]; then
-    KAMAILIO_HOST=$(/bin/hostname -f)
-else
-    KAMAILIO_HOST=$(/var/lib/kamailio/bin/hostname-fix -f)
-fi
-
-# KAMAILIO_HOST=$(/var/lib/kamailio/bin/hostname-fix -f)
-KAMAILIO_ADDR=$(/bin/hostname -i)
-
-
-echo "Getting Freeswitch Endpoints ..."
-# KUBERNETES_HOST=$(dig +short +search kubernetes)
-# AUTH_TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
-# curl -H "Authorization: Bearer $AUTH_TOKEN" https://$KUBERNETES_HOST/api/v1/endpoints
-# curl -sSL -k -H "Authorization: Bearer $AUTH_TOKEN" https://$KUBERNETES_HOST/api/v1/endpoints | jq -r ' .items[] | select(.metadata.name == "freeswitch") | .subsets[] | .addresses[] | .ip'
-
-if [ "$HOST_NETWORK" == true ]; then
-    FREESWITCH_NODES=$(get_endpoint_ips_nethost 'freeswitch')
-else
-    FREESWITCH_NODES=$(get_endpoint_ips 'freeswitch')
-fi
-
-# FREESWITCH_NODES=$(get_endpoint_ips 'freeswitch')
-
-
-echo "Rewriting Kamailio Configuration ..."
-sed -ir "s/^\(#!substdef \"!MY_HOSTNAME!\)\(.*\)\(!g\"\)/\1${KAMAILIO_HOST}\3/" /etc/kazoo/kamailio/local.cfg
-sed -ir "s/^\(#!substdef \"!MY_IP_ADDRESS!\)\(.*\)\(!g\"\)/\1${KAMAILIO_ADDR}\3/" /etc/kazoo/kamailio/local.cfg
-sed -ir "s/^\(#!substdef \"!MY_AMQP_URL!\)\(.*\)\(!g\"\)/\1${AMQP_URI}\3/" /etc/kazoo/kamailio/local.cfg
-sed -ir "s/^\(#!substdef \"!MY_WEBSOCKET_DOMAIN!\)\(.*\)\(!g\"\)/\1${KAMAILIO_WEBSOCKET_DOMAIN}\3/" /etc/kazoo/kamailio/local.cfg
 cat /etc/kazoo/kamailio/local.cfg
 
 
-echo "Writing Dispatcher Configuration ..."
-cat <<EOF > /etc/kazoo/kamailio/dbtext/dispatcher
-### Dispatcher Set IDs:
-### 1 - Primary media servers
-### 2 - Backup media servers
-### 3 - Alternate media server IPs (used only for classification)
-### 10 - Presence servers (if not locally handled)
-### 20 - Registrar servers (if not locally handled)
+echo "Adding freeswitch nodes to dispatcher ..."
+sed -ir '/1 sip:/d' /etc/kazoo/kamailio/dbtext/dispatcher
 
-# setid(integer) destination(sip uri) flags (integer, optional)
-EOF
+for node in `echo $FREESWITCH_NODES`; do
+    echo "1 sip:$node:11000 0" >> /etc/kazoo/kamailio/dbtext/dispatcher
+done
 
-node_num=1
-arr=(`echo ${FREESWITCH_NODES}`)
-for node in "${arr[@]}"; do
-    echo "1 sip:${node}:11000 $node_num" >> /etc/kazoo/kamailio/dbtext/dispatcher
-    ((node_num++))
-done  
 cat /etc/kazoo/kamailio/dbtext/dispatcher
 
 
-echo "Ensuring Permissions"
-chown -R kamailio:kamailio /var/lib/kamailio /etc/kazoo/kamailio
+echo "Ensuring Permissions ..."
+chown -R kamailio:kamailio /etc/kazoo/kamailio
 
 
 echo "Starting kamailio ..."
 cd ~
-    # tail -f /dev/null
-    exec /usr/sbin/kamailio $KAMAILIO_DAEMONIZE_OPTS -P $KAMAILIO_PID_FILE -m $KAMAILIO_SHM_MEMORY -M $KAMAILIO_PKG_MEMORY -u $KAMAILIO_USER -g $KAMAILIO_GROUP
-    
+    exec /usr/sbin/kamailio -DD -E -m $KAMAILIO_SHM_MEMORY -M $KAMAILIO_PKG_MEMORY -u kamailio -g kamailio $CLOG_ARGS 2>&1

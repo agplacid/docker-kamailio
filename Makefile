@@ -1,6 +1,8 @@
 NS = vp
 NAME = kamailio
-VERSION = 1.1.1
+APP_VERSION = 4.3.4
+IMAGE_VERSION = 2.0
+VERSION = $(APP_VERSION)-$(IMAGE_VERSION)
 LOCAL_TAG = $(NS)/$(NAME):$(VERSION)
 
 REGISTRY = callforamerica
@@ -10,6 +12,7 @@ REMOTE_TAG = $(REGISTRY)/$(NAME):$(VERSION)
 GITHUB_REPO = docker-kamailio
 DOCKER_REPO = kamailio
 BUILD_BRANCH = master
+
 
 .PHONY: all build test release shell run start stop rm rmi default
 
@@ -23,7 +26,7 @@ build:
 	$(MAKE) tag
 
 tag:
-	@docker tag -f $(LOCAL_TAG) $(REMOTE_TAG)
+	@docker tag $(LOCAL_TAG) $(REMOTE_TAG)
 
 rebuild:
 	@docker build -t $(LOCAL_TAG) --rm --no-cache .
@@ -35,20 +38,27 @@ commit:
 	@git add -A .
 	@git commit
 
-deploy:
-	@docker push $(REMOTE_TAG)
-
 push:
 	@git push origin master
 
 shell:
-	@docker exec -ti $(NAME) /bin/ash
+	@docker exec -ti $(NAME) /bin/bash
 
 run:
-	@docker run -it --rm --name $(NAME) -e "KUBERNETES_HOSTNAME_FIX=true" --entrypoint bash $(LOCAL_TAG)
+	@docker run -it --rm --name $(NAME) -e "ENVIRONMENT=local" -e "KAMAILIO_LOG_LEVEL=debug" --network=local --entrypoint bash $(LOCAL_TAG)
 
 launch:
-	@docker run -d --name $(NAME) $(LOCAL_TAG)
+	@docker run -d --name $(NAME) -e "ENVIRONMENT=local" -p "5060:5060" $(LOCAL_TAG)
+
+launch-net:
+	@docker run -d -h $(NAME) --name $(NAME) -e "ENVIRONMENT=local" -e "KAMAILIO_LOG_LEVEL=debug" --network=local $(LOCAL_TAG)
+
+launch-deps:
+	-cd ../docker-rabbitmq && make launch-net
+	-cd ../docker-freeswitch && make launch-net
+
+create-network:
+	@docker network create -d bridge local
 
 logs:
 	@docker logs $(NAME)
@@ -59,6 +69,9 @@ logsf:
 start:
 	@docker start $(NAME)
 
+kill:
+	@docker kill $(NAME)
+
 stop:
 	@docker stop $(NAME)
 
@@ -68,5 +81,23 @@ rm:
 rmi:
 	@docker rmi $(LOCAL_TAG)
 	@docker rmi $(REMOTE_TAG)
+
+kube-deploy-daemonset:
+	@kubectl create -f kubernetes/$(NAME)-daemonset.yaml
+
+kube-edit-daemonset:
+	@kubectl edit daemonset/$(NAME)
+
+kube-delete-daemonset:
+	@kubectl delete daemonset/$(NAME)
+
+kube-deploy-service:
+	@kubectl create -f kubernetes/$(NAME)-service.yaml
+
+kube-delete-service:
+	@kubectl delete svc $(NAME)
+
+kube-replace-service:
+	@kubectl replace -f kubernetes/$(NAME)-service.yaml
 
 default: build

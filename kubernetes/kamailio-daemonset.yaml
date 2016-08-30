@@ -9,23 +9,19 @@ spec:
       labels:
         app: kamailio
         project: valuphone
+        environment: production
     spec:
+      nodeSelector: 
+        kubernetes.io/hostname: plasma.valuphone.com
       hostNetwork: true
-      volumes:
-        - name: erlang-cookie-secret
-          secret:
-            secretName: erlang-cookie
       containers:
         - name: kamailio
           image: callforamerica/kamailio
           env:
-            - name: HOST_NETWORK
-              value: 'true'
-          imagePullPolicy: Always
-          volumeMounts:
-            - name: erlang-cookie-secret
-              readOnly: true
-              mountPath: /etc/secrets/erlang
+            - name: KAMAILIO_LOG_LEVEL
+              value: debug
+            - name: MY_WEBSOCKET_DOMAIN
+              value: sip.li
           ports:
             - name: sip-tcp
               protocol: TCP
@@ -33,18 +29,12 @@ spec:
             - name: sip-udp
               protocol: UDP
               containerPort: 5060
-            - name: sip-tls
-              protocol: TCP
-              containerPort: 5061
             - name: alg-tcp
               protocol: TCP
               containerPort: 7000
             - name: alg-udp
               protocol: UDP
-              containerPort: 7000
-            - name: alg-tls
-              protocol: TCP
-              containerPort: 7001   
+              containerPort: 7000 
           resources:
             requests:
               cpu: 2
@@ -56,10 +46,11 @@ spec:
             exec:
               command: ["kamctl", "monitor", "1", "|", "grep -q", "^Up"]
             initialDelaySeconds: 20
-            timeoutSeconds: 5
+            timeoutSeconds: 15
           livenessProbe:
             exec:
               command: ["kamctl", "monitor", "1", "|", "grep -q", "^Up"]
-            initialDelaySeconds: 20
-            timeoutSeconds: 5
+            initialDelaySeconds: 60
+            timeoutSeconds: 15
+          imagePullPolicy: Always
       restartPolicy: Always

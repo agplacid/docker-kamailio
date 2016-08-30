@@ -7,21 +7,19 @@ LABEL   os="linux" \
         os.version="6"
 
 LABEL   app.name="kamailio" \
-        app.version="1"
+        app.version="4.3.4"
 
-ENV     TERM=xterm \
-        HOME= \
-        PATH=$HOME:$PATH
+ENV     KAMAILIO_VERSION=4.3.4
+
+ENV     HOME=/opt/kamailio
+ENV     PATH=$HOME/bin:$PATH
 
 COPY    setup.sh /tmp/setup.sh
 RUN     /tmp/setup.sh
 
 COPY    entrypoint /usr/bin/entrypoint
 
-ENV     KUBERNETES_HOSTNAME_FIX=true \
-        HOME=/var/lib/kamailio \
-        PATH=$HOME:$HOME/bin:$PATH \
-        KAMAILIO_USE_LONGNAME=true
+ENV     KAMAILIO_LOG_LEVEL=info
 
 VOLUME  ["/var/lib/kamailio"]
 
@@ -33,6 +31,6 @@ EXPOSE  7000 7000/udp 7001
 
 # USER    kamailio
 
-WORKDIR /var/lib/kamailio
+WORKDIR /opt/kamailio
 
 CMD     ["/usr/bin/entrypoint"]

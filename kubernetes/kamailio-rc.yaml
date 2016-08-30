@@ -2,33 +2,24 @@ apiVersion: v1
 kind: ReplicationController
 metadata:
   name: kamailio
-  labels:
-    app: kamailio
-    role: sip-proxy
 spec:
-  replicas: 3
-  selector:
-    app: kamailio
-    project: valuphone
+  replicas: 1
   template:
     metadata:
       name: kamailio
-      labels:
-        app: kamailio
-        project: valuphone
+        labels:
+          app: kamailio
+          project: valuphone
+          environment: production
     spec:
-      volumes:
-        - name: erlang-cookie-secret
-          secret:
-            secretName: erlang-cookie
       containers:
         - name: kamailio
           image: callforamerica/kamailio
-          imagePullPolicy: Always
-          volumeMounts:
-            - name: erlang-cookie-secret
-              readOnly: true
-              mountPath: /etc/secrets/erlang
+          env:
+            - name: KAMAILIO_LOG_LEVEL
+              value: debug
+            - name: MY_WEBSOCKET_DOMAIN
+              value: sip.li
           ports:
             - name: sip-tcp
               protocol: TCP
@@ -36,18 +27,28 @@ spec:
             - name: sip-udp
               protocol: UDP
               containerPort: 5060
-            - name: sip-tls
-              protocol: TCP
-              containerPort: 5061
             - name: alg-tcp
               protocol: TCP
               containerPort: 7000
             - name: alg-udp
               protocol: UDP
               containerPort: 7000
-            - name: alg-tls
-              protocol: TCP
-              containerPort: 7001        
-        - name: dns
-          image: callforamerica/go-dnsmasq
+          resources:
+            requests:
+              cpu: 2
+              memory: 2G
+            # limits:
+            #   cpu: 
+            #   memory: 
+          readinessProbe:
+            exec:
+              command: ["kamctl", "monitor", "1", "|", "grep -q", "^Up"]
+            initialDelaySeconds: 20
+            timeoutSeconds: 15
+          livenessProbe:
+            exec:
+              command: ["kamctl", "monitor", "1", "|", "grep -q", "^Up"]
+            initialDelaySeconds: 60
+            timeoutSeconds: 15
+          imagePullPolicy: Always
       restartPolicy: Always
