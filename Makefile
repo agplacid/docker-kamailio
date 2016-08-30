@@ -51,7 +51,7 @@ launch:
 	@docker run -d --name $(NAME) -e "ENVIRONMENT=local" -p "5060:5060" -p "5064:5064" $(LOCAL_TAG)
 
 launch-net:
-	@docker run -d -h docker.local --name $(NAME) -e "ENVIRONMENT=local" -e "KAMAILIO_LOG_LEVEL=debug" -p "5060:5060" -p "5064:5064" --network=local $(LOCAL_TAG)
+	@docker run -d -h docker.local --name $(NAME) -e "ENVIRONMENT=local" -e "KAMAILIO_LOG_LEVEL=debug" -e "MY_WEBSOCKET_DOMAIN=kamailio.local" -p "5060:5060" -p "5060:5060/udp" -p "5064:5064" -p "5064:5064/udp" --network=local --net-alias kamailio.local $(LOCAL_TAG)
 
 launch-deps:
 	-cd ../docker-rabbitmq && make launch-net
