@@ -26,6 +26,9 @@ VOLUME  ["/var/lib/kamailio"]
 # SIP / SIP-TLS
 EXPOSE  5060 5060/udp 5061
 
+# WEBSOCKETS
+EXPOSE  5064
+
 # ALG / ALG-TLS
 EXPOSE  7000 7000/udp 7001 
 

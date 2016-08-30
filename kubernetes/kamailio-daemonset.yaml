@@ -29,6 +29,9 @@ spec:
             - name: sip-udp
               protocol: UDP
               containerPort: 5060
+            - name: websockets
+              protocol: TCP
+              containerPort: 5064
             - name: alg-tcp
               protocol: TCP
               containerPort: 7000
