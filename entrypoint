@@ -34,15 +34,16 @@ declare -A LOG_LEVEL_MAP=(
     [alert]=L_ALERT )
 
 
-echo "Setting environment specific services ..."
-if [ "$ENVIRONMENT" == "local" ]; then
-    FREESWITCH_NODES=${FREESWITCH_NODES:=freeswitch.local}
-else
-    KUBERNETES_AUTH_TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
-    FREESWITCH_NODES=$(curl -sSL -k -H "Authorization: Bearer $KUBERNETES_AUTH_TOKEN" https://$KUBERNETES_SERVICE_HOST/api/v1/endpoints | jq -r ".items[] | select(.metadata.name == \"freeswitch\") | .subsets[] | .addresses[] | .ip")
-fi
-
-echo "Freeswitch nodes: $FREESWITCH_NODES"
+function get_freeswitch_nodes {
+    if [ "$ENVIRONMENT" == "local" ]; then
+        FREESWITCH_NODES=${FREESWITCH_NODES:=freeswitch.local}
+    else
+        KUBERNETES_AUTH_TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+        FREESWITCH_NODES=$(curl -sSL -k -H "Authorization: Bearer $KUBERNETES_AUTH_TOKEN" https://$KUBERNETES_SERVICE_HOST/api/v1/endpoints | jq -r ".items[] | select(.metadata.name == \"freeswitch\") | .subsets[] | .addresses[] | .ip")
+    fi
+    [[ $FREESWITCH_NODES = '' ]] && return 1
+    echo "$FREESWITCH_NODES"
+}
 
 
 echo "Converting log level from $KAMAILIO_LOG_LEVEL ..."
@@ -79,6 +80,11 @@ fi
 cat /etc/kazoo/kamailio/local.cfg
 
 
+until get_freeswitch_nodes
+do
+    echo "waiting on freeswitch nodes ..."
+    sleep 5  
+done
 echo "Adding freeswitch nodes to dispatcher ..."
 sed -ir '/1 sip:/d' /etc/kazoo/kamailio/dbtext/dispatcher
 
