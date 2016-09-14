@@ -16,10 +16,20 @@ set -e
 : ${KAMAILIO_SHM_MEMORY:=128}
 : ${KAMAILIO_PKG_MEMORY:=4}
 
-: ${KAMAILIO_ENABLE_MESSAGE_ROLE:=false}
-: ${KAMAILIO_ENABLE_WEBSOCKETS_ROLE:=false}
-: ${KAMAILIO_ENABLE_PUSHER_ROLE:=false}
-: ${KAMAILIO_ENABLE_TLS_ROLE:=false}
+: ${ENABLE_ROLE_TRAFFIC_FILTER:=false}
+: ${ENABLE_ROLE_WEBSOCKETS:=false}
+: ${ENABLE_ROLE_TLS:=false}
+: ${ENABLE_ROLE_ANTIFLOOD:=false}
+: ${ENABLE_ROLE_RATE_LIMITER:=false}
+: ${ENABLE_ROLE_ACL:=false}
+: ${ENABLE_ROLE_MESSAGE:=false}
+: ${ENABLE_ROLE_PUSHER:=false}
+: ${ENABLE_ROLE_REGISTRAR_SYNC:=false}
+: ${ENABLE_ROLE_PRESENCE_QUERY:=false}
+: ${ENABLE_ROLE_PRESENCE_SYNC:=false}
+: ${ENABLE_ROLE_PRESENCE_NOTIFY_SYNC:=false}
+
+: ${KAMAILIO_ENABLE_ROLES:=websockets,message}
 
 [ "$KAMAILIO_LOG_COLOR" == true ] && CLOG_ARGS='-e'
 
@@ -57,24 +67,15 @@ sed -ir "/MY_AMQP_URL/s/127\.0\.0\.1/$MY_AMQP_HOST/" /etc/kazoo/kamailio/local.c
 sed -ir "/MY_WEBSOCKET_DOMAIN/s/2600hz\.com/$MY_WEBSOCKET_DOMAIN/" /etc/kazoo/kamailio/local.cfg
 
 
-if [[ $KAMAILIO_ENABLE_MESSAGE_ROLE = true ]]
-then
-    sed -ir '/MESSAGE-ROLE/s/# # //' /etc/kazoo/kamailio/local.cfg
-fi
+echo "Enabling roles: ${roles_to_enable[@]} in local.cfg ..."
+IFS=',' read -r -a roles_to_enable <<< `echo "$KAMAILIO_ENABLE_ROLES" | awk '{print toupper($0)}'`
 
-if [[ $KAMAILIO_ENABLE_WEBSOCKETS_ROLE = true ]]
+if [[ -n $roles_to_enable ]]
 then
-    sed -ir '/WEBSOCKETS-ROLE/s/# # //' /etc/kazoo/kamailio/local.cfg
-fi
-
-if [[ $KAMAILIO_ENABLE_PUSHER_ROLE = true ]]
-then
-    sed -ir '/PUSHER-ROLE/s/# # //' /etc/kazoo/kamailio/local.cfg
-fi
-
-if [[ $KAMAILIO_ENABLE_TLS_ROLE = true ]]
-then
-    sed -ir '/TLS-ROLE/s/# # //' /etc/kazoo/kamailio/local.cfg
+    for role in "${roles_to_enable[@]}"
+    do
+        sed -ir "/$role-ROLE/s/# # //" /etc/kazoo/kamailio/local.cfg
+    done
 fi
 
 cat /etc/kazoo/kamailio/local.cfg

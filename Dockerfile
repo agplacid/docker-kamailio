@@ -21,6 +21,8 @@ COPY    entrypoint /usr/bin/entrypoint
 
 ENV     KAMAILIO_LOG_LEVEL=info
 
+ENV     KAMAILIO_ENABLE_ROLES=websockets,message
+
 VOLUME  ["/var/lib/kamailio"]
 
 # SIP / SIP-TLS

@@ -5,6 +5,11 @@ set -e
 : ${KAZOO_RELEASE:=R15B}
 : ${JQ_VERSION:=1.5}
 
+NEWLINE_FIX_FILES=(acl fast-pickup dispatcher message presence 
+				   presence_notify_sync presence_query pusher rate-limiter 
+				   registrar registrar-sync responder traffic-filter 
+				   fast-pickup)
+
 
 echo "Creating user and group for kamailio ..."
 groupadd kamailio
@@ -122,6 +127,15 @@ alias egrep='egrep --color=auto'
 alias fgrep='fgrep --color=auto'
 alias grep='grep --color=auto'
 EOF
+
+
+echo "Fixing newlines in role cfg files ..."
+for file in ${NEWLINE_FIX_FILES[@]}
+do
+	sed -ir '/xlog/s/\("[)];\)/\\n\1/' /etc/kazoo/kamailio/$file-role.cfg
+done
+
+sed -ir '/xlog/s/\("[)];\)/\\n\1/' /etc/kazoo/kamailio/local.cfg
 
 
 echo "Setting Ownership & Permissions ..."

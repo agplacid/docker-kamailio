@@ -22,12 +22,8 @@ spec:
               value: debug
             - name: MY_WEBSOCKET_DOMAIN
               value: sip.li
-            - name: KAMAILIO_ENABLE_WEBSOCKETS_ROLE
-              value: 'true'
-            - name: KAMAILIO_ENABLE_MESSAGE_ROLE
-              value: 'true'
-            - name: KAMAILIO_ENABLE_PUSHER_ROLE
-              value: 'true'
+            - name: KAMAILIO_ENABLE_ROLES
+              value: 'websockets,message,pusher,presence_query,presence_sync,presence_notify_sync'
           ports:
             - name: sip-tcp
               protocol: TCP
