@@ -16,6 +16,11 @@ set -e
 : ${KAMAILIO_SHM_MEMORY:=128}
 : ${KAMAILIO_PKG_MEMORY:=4}
 
+: ${KAMAILIO_ENABLE_MESSAGE_ROLE:=false}
+: ${KAMAILIO_ENABLE_WEBSOCKETS_ROLE:=false}
+: ${KAMAILIO_ENABLE_PUSHER_ROLE:=false}
+: ${KAMAILIO_ENABLE_TLS_ROLE:=false}
+
 [ "$KAMAILIO_LOG_COLOR" == true ] && CLOG_ARGS='-e'
 
 declare -A LOG_LEVEL_MAP=( 
@@ -50,6 +55,27 @@ sed -ir "/MY_HOSTNAME/s/kamailio\.2600hz\.com/$MY_HOSTNAME/" /etc/kazoo/kamailio
 sed -ir "/MY_IP_ADDRESS/s/127\.0\.0\.1/$MY_IP_ADDRESS/" /etc/kazoo/kamailio/local.cfg
 sed -ir "/MY_AMQP_URL/s/127\.0\.0\.1/$MY_AMQP_HOST/" /etc/kazoo/kamailio/local.cfg
 sed -ir "/MY_WEBSOCKET_DOMAIN/s/2600hz\.com/$MY_WEBSOCKET_DOMAIN/" /etc/kazoo/kamailio/local.cfg
+
+
+if [[ $KAMAILIO_ENABLE_MESSAGE_ROLE = true ]]
+then
+    sed -ir '/MESSAGE-ROLE/s/# # //' /etc/kazoo/kamailio/local.cfg
+fi
+
+if [[ $KAMAILIO_ENABLE_WEBSOCKETS_ROLE = true ]]
+then
+    sed -ir '/WEBSOCKETS-ROLE/s/# # //' /etc/kazoo/kamailio/local.cfg
+fi
+
+if [[ $KAMAILIO_ENABLE_PUSHER_ROLE = true ]]
+then
+    sed -ir '/PUSHER-ROLE/s/# # //' /etc/kazoo/kamailio/local.cfg
+fi
+
+if [[ $KAMAILIO_ENABLE_TLS_ROLE = true ]]
+then
+    sed -ir '/TLS-ROLE/s/# # //' /etc/kazoo/kamailio/local.cfg
+fi
 
 cat /etc/kazoo/kamailio/local.cfg
 

@@ -1,8 +1,9 @@
 apiVersion: extensions/v1beta1
-kind: DaemonSet
+kind: Deployment
 metadata:
   name: kamailio
 spec:
+  replicas: 3
   template:
     metadata:
       name: kamailio
@@ -11,8 +12,6 @@ spec:
         project: valuphone
         environment: production
     spec:
-      nodeSelector: 
-        kubernetes.io/hostname: plasma.valuphone.com
       hostNetwork: true
       containers:
         - name: kamailio
@@ -46,14 +45,14 @@ spec:
               containerPort: 7000
             - name: alg-udp
               protocol: UDP
-              containerPort: 7000 
+              containerPort: 7000
           resources:
-            requests:
+            requests: 
               cpu: 2
               memory: 2G
             # limits:
-            #   cpu: 
-            #   memory: 
+            #   cpu:
+            #   memory:
           readinessProbe:
             exec:
               command: ["kamctl", "monitor", "1", "|", "grep -q", "^Up"]

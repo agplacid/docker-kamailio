@@ -82,6 +82,9 @@ rmi:
 	@docker rmi $(LOCAL_TAG)
 	@docker rmi $(REMOTE_TAG)
 
+kube-deploy:
+	@kubectl create -f kubernetes/$(NAME)-deployment.yaml --record
+
 kube-deploy-daemonset:
 	@kubectl create -f kubernetes/$(NAME)-daemonset.yaml
 
@@ -99,5 +102,14 @@ kube-delete-service:
 
 kube-replace-service:
 	@kubectl replace -f kubernetes/$(NAME)-service.yaml
+
+kube-logsf:
+	@kubectl logs -f $(shell kubectl get po | grep $(NAME) | cut -d' ' -f1)
+
+kube-logsft:
+	@kubectl logs -f --tail=25 $(shell kubectl get po | grep $(NAME) | cut -d' ' -f1)
+
+kube-shell:
+	@kubectl exec -ti $(shell kubectl get po | grep $(NAME) | cut -d' ' -f1) -- bash
 
 default: build

@@ -20,6 +20,12 @@ spec:
               value: debug
             - name: MY_WEBSOCKET_DOMAIN
               value: sip.li
+            - name: KAMAILIO_ENABLE_WEBSOCKETS_ROLE
+              value: 'true'
+            - name: KAMAILIO_ENABLE_MESSAGE_ROLE
+              value: 'true'
+            - name: KAMAILIO_ENABLE_PUSHER_ROLE
+              value: 'true'
           ports:
             - name: sip-tcp
               protocol: TCP
@@ -27,8 +33,11 @@ spec:
             - name: sip-udp
               protocol: UDP
               containerPort: 5060
-            - name: websockets
+            - name: ws-tcp
               protocol: TCP
+              containerPort: 5064
+            - name: ws-udp
+              protocol: UDP
               containerPort: 5064
             - name: alg-tcp
               protocol: TCP
@@ -46,12 +55,12 @@ spec:
           readinessProbe:
             exec:
               command: ["kamctl", "monitor", "1", "|", "grep -q", "^Up"]
-            initialDelaySeconds: 20
-            timeoutSeconds: 15
+            initialDelaySeconds: 10
+            timeoutSeconds: 10
           livenessProbe:
             exec:
               command: ["kamctl", "monitor", "1", "|", "grep -q", "^Up"]
-            initialDelaySeconds: 60
-            timeoutSeconds: 15
+            initialDelaySeconds: 15
+            timeoutSeconds: 10
           imagePullPolicy: Always
       restartPolicy: Always

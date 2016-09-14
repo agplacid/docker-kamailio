@@ -15,8 +15,11 @@ spec:
     - name: sip-udp
       protocol: UDP
       port: 5060
-    - name: websockets
+    - name: ws-tcp
       protocol: TCP
+      port: 5064
+    - name: ws-udp
+      protocol: UDP
       port: 5064
     - name: alg-tcp
       protocol: TCP
