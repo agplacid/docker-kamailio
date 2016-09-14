@@ -11,27 +11,18 @@ set -e
 : ${MY_HOSTNAME:=$(hostname -f)}
 : ${MY_IP_ADDRESS:=$(hostname -i | head -n 1)}
 : ${MY_AMQP_HOST:=rabbitmq}
+: ${MY_SECONDARY_AMQP_HOST:=rabbitmq-backup}
 : ${MY_WEBSOCKET_DOMAIN:=sip.li}
 
 : ${KAMAILIO_SHM_MEMORY:=128}
 : ${KAMAILIO_PKG_MEMORY:=4}
 
-: ${ENABLE_ROLE_TRAFFIC_FILTER:=false}
-: ${ENABLE_ROLE_WEBSOCKETS:=false}
-: ${ENABLE_ROLE_TLS:=false}
-: ${ENABLE_ROLE_ANTIFLOOD:=false}
-: ${ENABLE_ROLE_RATE_LIMITER:=false}
-: ${ENABLE_ROLE_ACL:=false}
-: ${ENABLE_ROLE_MESSAGE:=false}
-: ${ENABLE_ROLE_PUSHER:=false}
-: ${ENABLE_ROLE_REGISTRAR_SYNC:=false}
-: ${ENABLE_ROLE_PRESENCE_QUERY:=false}
-: ${ENABLE_ROLE_PRESENCE_SYNC:=false}
-: ${ENABLE_ROLE_PRESENCE_NOTIFY_SYNC:=false}
+: ${KAMAILIO_ENABLE_SECONDARY_AMQP:=false}
 
 : ${KAMAILIO_ENABLE_ROLES:=websockets,message}
 
 [ "$KAMAILIO_LOG_COLOR" == true ] && CLOG_ARGS='-e'
+
 
 declare -A LOG_LEVEL_MAP=( 
     [debug]=L_DBG 
@@ -65,6 +56,13 @@ sed -ir "/MY_HOSTNAME/s/kamailio\.2600hz\.com/$MY_HOSTNAME/" /etc/kazoo/kamailio
 sed -ir "/MY_IP_ADDRESS/s/127\.0\.0\.1/$MY_IP_ADDRESS/" /etc/kazoo/kamailio/local.cfg
 sed -ir "/MY_AMQP_URL/s/127\.0\.0\.1/$MY_AMQP_HOST/" /etc/kazoo/kamailio/local.cfg
 sed -ir "/MY_WEBSOCKET_DOMAIN/s/2600hz\.com/$MY_WEBSOCKET_DOMAIN/" /etc/kazoo/kamailio/local.cfg
+
+if [[ $KAMAILIO_ENABLE_SECONDARY_AMQP = true ]]; then
+    sed -ir "/MY_AMQP_URL/a \
+    \
+    #!substdef \"!MY_AMQP_URL_SECONDARY!kazoo://guest:guest@${MY_SECONDARY_AMQP_HOST}:5672!g\"" \
+        /etc/kazoo/kamailio/local.cfg
+fi
 
 
 echo "Enabling roles: ${roles_to_enable[@]} in local.cfg ..."
