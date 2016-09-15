@@ -10,8 +10,8 @@ set -e
 
 : ${MY_HOSTNAME:=$(hostname -f)}
 : ${MY_IP_ADDRESS:=$(hostname -i | head -n 1)}
-: ${MY_AMQP_HOST:=rabbitmq}
-: ${MY_SECONDARY_AMQP_HOST:=rabbitmq-backup}
+: ${MY_AMQP_HOST:=rabbitmq-alpha}
+: ${MY_SECONDARY_AMQP_HOST:=rabbitmq-beta}
 : ${MY_WEBSOCKET_DOMAIN:=sip.li}
 
 : ${KAMAILIO_SHM_MEMORY:=128}
