@@ -1,41 +1,38 @@
-FROM centos:6
+FROM callforamerica/debian
 
 MAINTAINER joe <joe@valuphone.com>
 
-LABEL   os="linux" \
-        os.distro="centos" \
-        os.version="6"
+ARG     KAMAILIO_VERSION
 
-LABEL   app.name="kamailio" \
-        app.version="4.3.4"
+ENV     KAMAILIO_VERSION=${KAMAILIO_VERSION:-4.4.3}
 
-ENV     KAMAILIO_VERSION=4.3.4
+LABEL   app.kamailio.version=$KAMAILIO_VERSION
 
 ENV     HOME=/opt/kamailio
-ENV     PATH=$HOME/bin:$PATH
 
-COPY    setup.sh /tmp/setup.sh
-RUN     /tmp/setup.sh
+COPY    build.sh /tmp/
+RUN     /tmp/build.sh
 
-COPY    entrypoint /usr/bin/entrypoint
+COPY    entrypoint /
+COPY    sync-freeswitch-servers /usr/local/bin/
 
-ENV     KAMAILIO_LOG_LEVEL=info
+ENV     KAMAILIO_LOG_LEVEL=info \
+        KAMAILIO_ENABLE_ROLES=websockets,message
 
-ENV     KAMAILIO_ENABLE_ROLES=websockets,message
+VOLUME  ["/volumes/ram", "/volumes/tls"]
 
-VOLUME  ["/var/lib/kamailio"]
-
-# SIP / SIP-TLS
+# SIP-TCP / SIP-UDP / SIP-TLS
 EXPOSE  5060 5060/udp 5061
 
-# WEBSOCKETS
-EXPOSE  5064
+# WS-TCP / WS-UDP / WSS-TCP / WSS-UDP
+EXPOSE  5064 5064/udp 5065 5065/udp
 
-# ALG / ALG-TLS
+# ALG-TCP / ALG-UDP / ALG-TLS
 EXPOSE  7000 7000/udp 7001 
 
 # USER    kamailio
 
 WORKDIR /opt/kamailio
 
-CMD     ["/usr/bin/entrypoint"]
+ENTRYPOINT  ["/dumb-init", "--"]
+CMD         ["/entrypoint"]

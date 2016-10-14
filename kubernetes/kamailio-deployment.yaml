@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: kamailio
 spec:
-  replicas: 3
+  replicas: 1
   template:
     metadata:
       name: kamailio
@@ -13,6 +13,8 @@ spec:
         environment: production
     spec:
       hostNetwork: true
+      nodeSelector: 
+        kubernetes.io/hostname: plasma.valuphone.com
       containers:
         - name: kamailio
           image: callforamerica/kamailio

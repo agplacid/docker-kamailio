@@ -1,6 +1,6 @@
 NS = vp
 NAME = kamailio
-APP_VERSION = 4.3.4
+APP_VERSION = 4.4.3
 IMAGE_VERSION = 2.0
 VERSION = $(APP_VERSION)-$(IMAGE_VERSION)
 LOCAL_TAG = $(NS)/$(NAME):$(VERSION)
@@ -22,14 +22,15 @@ checkout:
 	@git checkout $(BUILD_BRANCH)
 
 build:
-	@docker build -t $(LOCAL_TAG) --rm .
+	@docker build -t $(LOCAL_TAG) --force-rm .
 	$(MAKE) tag
+	$(MAKE) dclean
 
 tag:
 	@docker tag $(LOCAL_TAG) $(REMOTE_TAG)
 
 rebuild:
-	@docker build -t $(LOCAL_TAG) --rm --no-cache .
+	@docker build -t $(LOCAL_TAG) --force-rm --no-cache .
 
 test:
 	@rspec ./tests/*.rb
@@ -45,20 +46,29 @@ shell:
 	@docker exec -ti $(NAME) /bin/bash
 
 run:
-	@docker run -it --rm --name $(NAME) -e "ENVIRONMENT=local" -e "KAMAILIO_LOG_LEVEL=debug" --network=local --entrypoint bash $(LOCAL_TAG)
+	@docker run -it --rm --name $(NAME) -h $(NAME).local --env-file run.env --entrypoint bash $(LOCAL_TAG)
 
 launch:
-	@docker run -d --name $(NAME) -e "ENVIRONMENT=local" -p "5060:5060" -p "5064:5064" $(LOCAL_TAG)
+	@docker run -d --name $(NAME) -h $(NAME).local --env-file default.env  --tmpfs /volumes/ram:size=32M $(LOCAL_TAG)
 
 launch-net:
-	@docker run -d -h kamailio.local --name $(NAME) -e "ENVIRONMENT=local" -e "KAMAILIO_ENABLE_SECONDARY_AMQP=true" -e "KAMAILIO_LOG_LEVEL=debug" -e "KAMAILIO_ENABLE_ROLES=websockets,message,pusher,presence_query,presence_sync,presence_notify_sync" -e "MY_WEBSOCKET_DOMAIN=kamailio.local" -p "5060:5060" -p "5060:5060/udp" -p "5064:5064" -p "5064:5064/udp" --network=local --net-alias kamailio.local $(LOCAL_TAG)
+	@docker run -d --name $(NAME) -h $(NAME).local --env-file default.env -p "5060-5061:5060-5061" -p "5060:5060/udp" -p "5064-5065:5064-5065" -p "5064-5065:5064-5065/udp" -p "7000-7001:7000-7001" -p "7000:7000/udp" --network=local --net-alias --tmpfs /volumes/ram:size=32M $(NAME).local $(LOCAL_TAG)
 
 launch-deps:
-	-cd ../docker-rabbitmq && make launch-net
-	-cd ../docker-freeswitch && make launch-net
+	-cd ../docker-rabbitmq && make launch-as-dep
+	-cd ../docker-freeswitch && make launch-as-dep
 
 create-network:
 	@docker network create -d bridge local
+
+proxies-up:
+	@cd ../docker-aptcacher-ng && make remote-persist
+	#@cd ../docker-squid && make remote-persist
+
+dclean:
+	@-docker ps -aq | gxargs -I{} docker rm {} 2> /dev/null || true
+	@-docker images -f dangling=true -q | xargs docker rmi
+	@-docker volume ls -f dangling=true -q | xargs docker volume rm
 
 logs:
 	@docker logs $(NAME)
@@ -77,6 +87,9 @@ stop:
 
 rm:
 	@docker rm $(NAME)
+
+rmf:
+	@docker rm -f $(NAME)
 
 rmi:
 	@docker rmi $(LOCAL_TAG)

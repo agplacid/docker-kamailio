@@ -26,6 +26,9 @@ spec:
               value: 'true'
             - name: KAMAILIO_ENABLE_ROLES
               value: 'websockets,message,pusher,presence_query,presence_sync,presence_notify_sync'
+          volumeMounts:
+          - name: volumes-ram-ramfs
+            mountPath: /volumes/ram
           ports:
             - name: sip-tcp
               protocol: TCP
@@ -49,9 +52,9 @@ spec:
             requests:
               cpu: 2
               memory: 2G
-            # limits:
-            #   cpu: 
-            #   memory: 
+            limits:
+              cpu: 2
+              memory: 2G
           readinessProbe:
             exec:
               command: ["kamctl", "monitor", "1", "|", "grep -q", "^Up"]
@@ -63,4 +66,8 @@ spec:
             initialDelaySeconds: 30
             timeoutSeconds: 10
           imagePullPolicy: Always
+      volumes:
+      - name: volumes-ram-ramfs
+        emptyDir:
+          medium: Memory
       restartPolicy: Always

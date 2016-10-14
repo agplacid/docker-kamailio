@@ -1,28 +1,9 @@
-#!/bin/bash
+#!/bin/bash -l
 
 set -e
 
-. ~/.bashrc
-
-# accepts: debug info notice warn error critical alert
-: ${KAMAILIO_LOG_LEVEL:=info}
-: ${KAMAILIO_LOG_COLOR:=true}
-
-: ${MY_HOSTNAME:=$(hostname -f)}
-: ${MY_IP_ADDRESS:=$(hostname -i | head -n 1)}
-: ${MY_AMQP_HOST:=rabbitmq-alpha}
-: ${MY_SECONDARY_AMQP_HOST:=rabbitmq-beta}
-: ${MY_WEBSOCKET_DOMAIN:=sip.li}
-
-: ${KAMAILIO_SHM_MEMORY:=128}
-: ${KAMAILIO_PKG_MEMORY:=4}
-
-: ${KAMAILIO_ENABLE_SECONDARY_AMQP:=false}
-
-: ${KAMAILIO_ENABLE_ROLES:=websockets,message}
-
-[ "$KAMAILIO_LOG_COLOR" == true ] && CLOG_ARGS='-e'
-
+app=kamailio
+user=$app
 
 declare -A LOG_LEVEL_MAP=( 
     [debug]=L_DBG 
@@ -33,72 +14,193 @@ declare -A LOG_LEVEL_MAP=(
     [critical]=L_CRIT 
     [alert]=L_ALERT )
 
+if [ -f /etc/default/$app ]
+then
+    . /etc/default/$app
+fi
 
-function get_freeswitch_nodes {
-    if [ "$ENVIRONMENT" == "local" ]; then
-        FREESWITCH_NODES=${FREESWITCH_NODES:=freeswitch.local}
-    else
-        KUBERNETES_AUTH_TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
-        FREESWITCH_NODES=$(curl -sSL -k -H "Authorization: Bearer $KUBERNETES_AUTH_TOKEN" https://$KUBERNETES_SERVICE_HOST/api/v1/endpoints | jq -r ".items[] | select(.metadata.name == \"freeswitch\") | .subsets[] | .addresses[] | .ip")
-    fi
-    [[ $FREESWITCH_NODES = '' ]] && return 1
-    echo "$FREESWITCH_NODES"
+: ${RABBITMQ_USER:=guest}
+: ${RABBITMQ_PASS:=guest}
+
+: ${RABBITMQ_HOST_A:=rabbitmq-alpha}
+: ${RABBITMQ_HOST_B:=rabbitmq-beta}
+
+# accepts: debug info notice warn error critical alert
+: ${KAMAILIO_LOG_LEVEL:=info}
+: ${KAMAILIO_LOG_COLOR:=true}
+
+: ${KAMAILIO_ENABLE_SECONDARY_AMQP:=false}
+
+: ${KAMAILIO_MY_HOSTNAME:=$(hostname -f)}
+: ${KAMAILIO_MY_IP_ADDRESS:=$(hostname -i | head -1)}
+: ${KAMAILIO_MY_AMQP_URL:=kazoo://$RABBITMQ_USER:$RABBITMQ_PASS@$RABBITMQ_HOST_A:5672}
+: ${KAMAILIO_MY_AMQP_URL_SECONDARY:=kazoo://$RABBITMQ_USER:$RABBITMQ_PASS@$RABBITMQ_HOST_B:5672}
+: ${KAMAILIO_MY_WEBSOCKET_DOMAIN:=sip.li}
+
+: ${KAMAILIO_SHM_MEMORY:=128}
+: ${KAMAILIO_PKG_MEMORY:=8}
+: ${KAMAILIO_CHILD_PROC:=8}
+
+: ${KAMAILIO_ENABLE_ROLES:=websockets,message}
+
+: ${KAMAILIO_FREESWITCH_SYNC_SOURCE:=dns}
+: ${KAMAILIO_FREESWITCH_SYNC_ARGS:=freeswitch}
+
+
+function log 
+{
+    local msg="$1"
+    echo -e "\E[36m[*]\E[0m ${msg}" 
 }
 
+# function get_freeswitch_nodes_dns
+# {
+#     local query=$(dig +short +search freeswitch)
+#     [[ -z $query ]] && return 1
+#     echo "$query"
+# }
 
-echo "Converting log level from $KAMAILIO_LOG_LEVEL ..."
-LOG_LEVEL="${LOG_LEVEL_MAP[$(echo "$KAMAILIO_LOG_LEVEL" | awk '{print tolower($0)}')]}"
+# function get_freeswitch_nodes_kubernetes
+# {
 
-echo "Setting log level to: $LOG_LEVEL ..."
-sed -ir "/^debug/s/\(L_.*\)$/$LOG_LEVEL/" /etc/kazoo/kamailio/local.cfg
+#     local kube_token=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+#     local query=$(curl -sSL -k -H "Authorization: Bearer $token" https://kubernetes/api/v1/endpoints | jq -r ".items[] | select(.metadata.name == \"freeswitch\") | .subsets[] | .addresses[] | .ip")
+#     [[ -z $query ]] && return 1
+#     echo "$query"
+# }
 
-echo "Rewriting kamailio local.cfg ..."
-sed -ir "/MY_HOSTNAME/s/kamailio\.2600hz\.com/$MY_HOSTNAME/" /etc/kazoo/kamailio/local.cfg
-sed -ir "/MY_IP_ADDRESS/s/127\.0\.0\.1/$MY_IP_ADDRESS/" /etc/kazoo/kamailio/local.cfg
-sed -ir "/MY_AMQP_URL/s/127\.0\.0\.1/$MY_AMQP_HOST/" /etc/kazoo/kamailio/local.cfg
-sed -ir "/MY_WEBSOCKET_DOMAIN/s/2600hz\.com/$MY_WEBSOCKET_DOMAIN/" /etc/kazoo/kamailio/local.cfg
+log "Converting log level from $KAMAILIO_LOG_LEVEL ..."
+KAMAILIO_LOG_LEVEL=${LOG_LEVEL_MAP[${KAMAILIO_LOG_LEVEL,,}]}
 
-if [[ $KAMAILIO_ENABLE_SECONDARY_AMQP = true ]]; then
-    sed -ir "/MY_AMQP_URL/a \
-    \
-    #!substdef \"!MY_AMQP_URL_SECONDARY!kazoo://guest:guest@${MY_SECONDARY_AMQP_HOST}:5672!g\"" \
-        /etc/kazoo/kamailio/local.cfg
-fi
+log "Setting log level to: $KAMAILIO_LOG_LEVEL ..."
+sed -i -r "/^debug /s/\w*$/${KAMAILIO_LOG_LEVEL}/" /etc/kamailio/local.cfg
 
 
-echo "Enabling roles: ${roles_to_enable[@]} in local.cfg ..."
-IFS=',' read -r -a roles_to_enable <<< `echo "$KAMAILIO_ENABLE_ROLES" | awk '{print toupper($0)}'`
+log "Rewriting local.cfg ..."
+sed -i "/MY_HOSTNAME/s/\(MY_HOSTNAME\!\).*\(\!\)/\1${KAMAILIO_MY_HOSTNAME}\\2/" /etc/kamailio/local.cfg
+sed -i "/MY_IP_ADDRESS/s/\(MY_IP_ADDRESS\!\).*\(\!\)/\1${KAMAILIO_MY_IP_ADDRESS}\2/" /etc/kamailio/local.cfg 
+sed -i "/MY_AMQP_URL/s/\(MY_AMQP_URL\!\).*\(\!\)/\1${KAMAILIO_MY_AMQP_URL//\//\\\/}\2/" /etc/kamailio/local.cfg 
+sed -i "/MY_WEBSOCKET_DOMAIN/s/\(MY_WEBSOCKET_DOMAIN\!\).*\(\!\)/\1${KAMAILIO_MY_WEBSOCKET_DOMAIN}\2/" /etc/kamailio/local.cfg 
 
-if [[ -n $roles_to_enable ]]
+
+if [[ $KAMAILIO_ENABLE_SECONDARY_AMQP = true ]]
 then
-    for role in "${roles_to_enable[@]}"
-    do
-        sed -ir "/$role-ROLE/s/# # //" /etc/kazoo/kamailio/local.cfg
-    done
+    if ! grep -q MY_AMQP_URL_SECONDARY /etc/kamailio/local.cfg
+    then
+        sed -i "/MY_AMQP_URL/a \
+            \
+            #!substdef \"!MY_AMQP_URL_SECONDARY!${KAMAILIO_MY_AMQP_URL_SECONDARY//\//\\\/}!g\"" \
+                /etc/kamailio/local.cfg
+    else
+        sed -i "/MY_AMQP_URL_SECONDARY/s/\(MY_AMQP_URL_SECONDARY\!\).*\(\!\)/\1${KAMAILIO_MY_AMQP_URL_SECONDARY//\//\\\/}\2/" /etc/kamailio/local.cfg 
+    fi
+else
+    if grep -q MY_AMQP_URL_SECONDARY /etc/kamailio/local.cfg
+    then
+        sed -i '/MY_AMQP_URL_SECONDARY/d' /etc/kamailio/local.cfg
+    fi
 fi
 
-cat /etc/kazoo/kamailio/local.cfg
+cat /etc/kamailio/local.cfg | tail -n 94 | head -n 25
 
 
-until get_freeswitch_nodes
-do
-    echo "waiting on freeswitch nodes ..."
-    sleep 5  
-done
-echo "Adding freeswitch nodes to dispatcher ..."
-sed -ir '/1 sip:/d' /etc/kazoo/kamailio/dbtext/dispatcher
+log "Enabling roles: ${KAMAILIO_ENABLE_ROLES} in local.cfg ..."
+if [[ -n $KAMAILIO_ENABLE_ROLES ]]
+then
+    for role in $(echo "${KAMAILIO_ENABLE_ROLES//,/ }")
+    do 
+        sed -i "/${role^^}_ROLE/s/# # //" /etc/kamailio/local.cfg
+    done
 
-for node in `echo $FREESWITCH_NODES`; do
-    echo "1 sip:$node:11000 0" >> /etc/kazoo/kamailio/dbtext/dispatcher
-done
+    cat /etc/kamailio/local.cfg | head -n 30 | tail -n 22 
+fi
 
-cat /etc/kazoo/kamailio/dbtext/dispatcher
-
-
-echo "Ensuring Permissions ..."
-chown -R kamailio:kamailio /etc/kazoo/kamailio
+log "Copying dbtext files to /volumes/ram/dbtext ..."
+mkdir -p /volumes/ram/dbtext
+cp -R /etc/kamailio/dbtext/* /volumes/ram/dbtext
+chown -R $user:$user /volumes/ram/dbtext
 
 
-echo "Starting kamailio ..."
+log "Syncing freeswitch servers ..."
+sync-freeswitch-servers $KAMAILIO_FREESWITCH_SYNC_SOURCE $KAMAILIO_FREESWITCH_SYNC_ARGS
+
+# until get_freeswitch_nodes
+# do
+#     echo "waiting on freeswitch nodes ..."
+#     sleep 5  
+# done
+
+# case "$KAMAILIO_GET_FREESWITCH_NODES_FROM" in
+#     local)
+#         : ${FREESWITCH_NODES:=freeswitch.local}
+#         ;;
+#     dns)
+#         echo -n "Querying DNS for freeswitch nodes ."
+#         until [[ ! -z $FREESWITCH_NODES ]]
+#         do
+#             sleep 1
+#             FREESWITCH_NODES=$(get_freeswitch_nodes_dns)
+#             echo -n '.'
+#         done
+#         ;;
+#     kubernetes)
+#         echo -n "Querying kubernetes for freeswitch nodes ."
+#         until [[ ! -z $FREESWITCH_NODES ]]
+#         do
+#             sleep 1
+#             FREESWITCH_NODES=$(get_freeswitch_nodes_kubernetes)
+#             echo -n '.'
+#         done
+#         ;;
+#     *)
+#         : ${FREESWITCH_NODES:=}  
+#         ;;
+# esac
+
+# [[ ! -z $FREESWITCH_NODES ]] && echo "Got freeswitch nodes: $FREESWITCH_NODES"
+
+# echo "Getting freeswitch nodes ..."
+# if [[ $KAMAILIO_GET_FREESWITCH_NODES_FROM = 'local' ]]
+# then
+#     : ${FREESWITCH_NODES:=freeswitch.local}
+# elif [[ $KAMAILIO_GET_FREESWITCH_NODES_FROM = 'dns' ]]
+# then
+#     echo -n "Querying DNS for freeswitch nodes ."
+#     until [[ ! -z $FREESWITCH_NODES ]]
+#     do
+#         sleep 1
+#         FREESWITCH_NODES=$(get_freeswitch_nodes_dns)
+#         echo -n '.'
+#     done
+# elif [[ $KAMAILIO]]
+# else
+#     : ${FREESWITCH_NODES:=}
+# fi
+
+# [[ ! -z $FREESWITCH_NODES ]] && echo "Got freeswitch nodes: $FREESWITCH_NODES"
+
+
+# echo "Adding freeswitch nodes to dispatcher ..."
+# if [[ ! -z $FREESWITCH_NODES ]]
+# then
+#     sed -i '/sip\\:/d' /etc/kamailio/dbtext/dispatcher
+    
+#     for node in $(echo $FREESWITCH_NODES); do
+#         echo "1:1:sip\:$node\:11000:0:1: : " >> /etc/kamailio/dbtext/dispatcher
+#     done
+    
+#     cat /etc/kamailio/dbtext/dispatcher
+# fi
+
+
+log "Ensuring Permissions ..."
+chown -R $user:$user /etc/kamailio
+
+
+log "Building arguments ..."
+[[ $KAMAILIO_LOG_COLOR = true ]] && CLOG_ARGS='-e'
+
+
+log "Starting $app ..."
 cd ~
-    exec /usr/sbin/kamailio -DD -E -m $KAMAILIO_SHM_MEMORY -M $KAMAILIO_PKG_MEMORY -u kamailio -g kamailio $CLOG_ARGS 2>&1
+    exec kamailio -DD -E -m $KAMAILIO_SHM_MEMORY -M $KAMAILIO_PKG_MEMORY -u $user -g $user -n $KAMAILIO_CHILD_PROC $CLOG_ARGS 2>&1

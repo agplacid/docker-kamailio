@@ -1,0 +1,233 @@
+#!/bin/bash
+
+set -e
+
+dispatcher_path=/volumes/ram/dbtext/dispatcher
+kube_token_path=/var/run/secrets/kubernetes.io/serviceaccount/token
+
+user=kamailio
+
+
+function log 
+{
+    local msg="$1" >&2
+    echo -e "\E[36m[*]\E[0m ${msg}" 
+}
+
+function errlog
+{
+    local msg="$1"
+    echo -e "\E[31m[x]\E[0m ${msg}" >&2
+}
+
+function header
+{
+    local msg="$1"
+    echo -e "\E[35m[#]\E[0m ${msg}" >&2
+}
+
+function progress_tick
+{
+    echo -e -n '\E[33m . \E[0m' >&2
+}
+
+function get_freeswitch_servers_dns
+{
+    local dns_name=${1:-freeswitch}
+    local query=$(dig +short +search $dns_name)
+    [[ -z $query || $query =~ Warning ]] && return 1
+    echo "$query"
+}
+
+function get_freeswitch_servers_kubernetes
+{
+    local service_name=${1:-freeswitch}
+    local kube_host=https://kubernetes
+    
+    if ! which jq 2&>1 /dev/null 
+        then
+        errlog "\njq not installed"
+        return 1
+    elif ! which jq 2&>1 /dev/null
+    then
+        errlog "\ncurl not installed"
+        return 1
+    fi
+
+    if [[ -f $kube_token_path ]]
+    then
+        local kube_token=$(cat $kube_token_path)
+    else
+        errlog "\npath for kube token: $kube_token_path is invalid"
+        return 1
+    fi
+
+    local query=$(curl -sSL -k -H "Authorization: Bearer $kube_token" $kube_host/api/v1/endpoints 2> /dev/null | jq -r ".items[] | select(.metadata.name == \"${service_name}\") | .subsets[] | .addresses[] | .ip" 2> /dev/null)
+    [[ -z $query ]] && return 1
+    echo "$query"
+}
+
+function get_freeswitch_servers_file
+{
+    local file_path=$1
+    if [[ ! -f $file_path ]]
+    then
+        errlog "Bad file path: $file_path"
+        return 1
+    fi
+
+    local contents="$(cat $file_path)"
+    if [[ ! -z $contents ]]
+    then
+        echo "$contents"
+    else
+        errlog "File: $file_path is empty"
+        return 1
+    fi
+}
+
+function get_freeswitch_servers_env
+{
+    if [[ ! -z $FREESWITCH_NODES ]]
+    then
+        echo "${FREESWITCH_NODES//,/ }"
+    else
+        errlog "No servers in: FREESWITCH_NODES"
+        return 1
+    fi
+}
+
+function get_freeswitch_servers
+{
+    local src=$1
+    local args=$2
+    local servers=
+
+    until [[ ! -z $servers ]]
+    do
+        case "$src" in
+            localhost)
+                servers='127.0.0.1'
+                ;;
+            dns)
+                progress_tick
+                servers=$(get_freeswitch_servers_dns $args)
+                ;;
+            kubernetes)
+                progress_tick
+                servers=$(get_freeswitch_servers_kubernetes $args)
+                ;;
+            file)
+                servers=$(get_freeswitch_servers_file $args)
+                ;;
+            env)
+                servers=$(get_freeswitch_servers_env)
+                ;;
+            none)
+                exit 0
+                ;;
+            *)
+                errlog "Incorrect freeswitch node source: $src"
+                exit 1
+                ;;
+        esac
+        [[ $? -gt 0 ]] && exit 1
+        sleep 1
+    done
+    clean_input "$servers"
+}
+
+function clean_input
+{
+    inp=$1
+    echo "$inp" | sed 's/[[:space:]]\+/ /g;s/^[[:space:]]*\|[[:space:]]$//g;/^\s*$/d' | sort | uniq | awk 1 ORS=' ' | sed 's/[[:space:]]$//g'
+}
+
+function clear_dispatcher
+{
+    sed -i '/^id/!d' $dispatcher_path
+}
+
+function add_server_to_dispatcher
+{
+    local server=$1
+    echo "1:1:sip\:$server\:11000:0:1: : " >> $dispatcher_path
+}
+
+function add_fs_servers
+{
+    local servers=$1
+    
+    log "Adding freeswitch servers: $servers to dispatcher ..."
+    clear_dispatcher
+
+    for server in $(echo $servers); do
+        if test_server_name $server
+        then
+            add_server_to_dispatcher $server
+        fi
+    done
+    show_dispatcher
+}
+
+function show_dispatcher
+{
+    cat $dispatcher_path | tail -n +2 >&2
+}
+
+function usage
+{
+    header "Usage: ${0##*/} {localhost|dns <dns-name>|kubernetes <service-name>|file <filename>|env|none|clear-dispatcher}"
+    exit 1
+}
+
+function set_permissions
+{
+    log "Ensuring Permissions ..."
+    chown -R $user:$user /etc/kamailio
+}
+
+function reload_dispatcher
+{
+    log "Reloading dispatcher ..."
+    if kamctl uptime 2> /dev/null | grep --silent ^Up
+    then
+        kamctl dispatcher reload
+    fi
+}
+
+function test_server_name
+{
+    local query=$1
+
+    if [[ $query =~ ^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$ ]]
+    then
+        return 0
+    else
+        return 1
+    fi
+}
+
+function main
+{
+    if [[ $1 = clear-dispatcher ]]
+    then
+        clear_dispatcher
+        exit 0
+    fi
+
+    local servers=$(get_freeswitch_servers $@)
+    if [[ ! -z $servers ]]
+    then
+        add_fs_servers "$servers"
+        set_permissions
+        reload_dispatcher
+    fi
+}
+
+if [[ $1 ]]
+then
+    main "$@"
+else
+    usage
+fi
