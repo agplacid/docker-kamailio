@@ -13,6 +13,12 @@ GITHUB_REPO = docker-kamailio
 DOCKER_REPO = kamailio
 BUILD_BRANCH = master
 
+VOLUME_ARGS = --tmpfs /volumes/ram:size=32M
+ENV_ARGS = --env-file default.env
+PORT_ARGS = -p "5060-5061:5060-5061" -p "5060:5060/udp" -p "5064-5065:5064-5065" -p "5064-5065:5064-5065/udp" -p "7000-7001:7000-7001" -p "7000:7000/udp"
+SHELL = bash -l
+
+-include ../Makefile.inc
 
 .PHONY: all build test release shell run start stop rm rmi default
 
@@ -43,16 +49,16 @@ push:
 	@git push origin master
 
 shell:
-	@docker exec -ti $(NAME) /bin/bash
+	@docker exec -ti $(NAME) $(SHELL)
 
 run:
-	@docker run -it --rm --name $(NAME) -h $(NAME).local --env-file run.env --entrypoint bash $(LOCAL_TAG)
+	@docker run -it --rm --name $(NAME) -h $(NAME).local --env-file run.env $(VOLUME_ARGS) $(LOCAL_TAG) $(SHELL)
 
 launch:
-	@docker run -d --name $(NAME) -h $(NAME).local --env-file default.env  --tmpfs /volumes/ram:size=32M $(LOCAL_TAG)
+	@docker run -d --name $(NAME) -h $(NAME).local $(ENV_ARGS) $(VOLUME_ARGS) $(PORT_ARGS) $(LOCAL_TAG)
 
 launch-net:
-	@docker run -d --name $(NAME) -h $(NAME).local --env-file default.env -p "5060-5061:5060-5061" -p "5060:5060/udp" -p "5064-5065:5064-5065" -p "5064-5065:5064-5065/udp" -p "7000-7001:7000-7001" -p "7000:7000/udp" --network=local --net-alias --tmpfs /volumes/ram:size=32M $(NAME).local $(LOCAL_TAG)
+	@docker run -d --name $(NAME) -h $(NAME).local $(ENV_ARGS) $(VOLUME_ARGS) $(PORT_ARGS) --network local --net-alias $(NAME).local $(LOCAL_TAG)
 
 launch-deps:
 	-cd ../docker-rabbitmq && make launch-as-dep
@@ -65,10 +71,10 @@ proxies-up:
 	@cd ../docker-aptcacher-ng && make remote-persist
 	#@cd ../docker-squid && make remote-persist
 
-dclean:
-	@-docker ps -aq | gxargs -I{} docker rm {} 2> /dev/null || true
-	@-docker images -f dangling=true -q | xargs docker rmi
-	@-docker volume ls -f dangling=true -q | xargs docker volume rm
+# dclean:
+# 	@-docker ps -aq | gxargs -I{} docker rm {} 2> /dev/null || true
+# 	@-docker images -f dangling=true -q | xargs docker rmi
+# 	@-docker volume ls -f dangling=true -q | xargs docker volume rm
 
 logs:
 	@docker logs $(NAME)

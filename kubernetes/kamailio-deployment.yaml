@@ -16,52 +16,133 @@ spec:
       nodeSelector: 
         kubernetes.io/hostname: plasma.valuphone.com
       containers:
-        - name: kamailio
-          image: callforamerica/kamailio
-          env:
-            - name: KAMAILIO_LOG_LEVEL
-              value: debug
-            - name: MY_WEBSOCKET_DOMAIN
-              value: sip.li
-            - name: KAMAILIO_ENABLE_SECONDARY_AMQP
-              value: 'true'
-            - name: KAMAILIO_ENABLE_ROLES
-              value: 'websockets,message,pusher,presence_query,presence_sync,presence_notify_sync'
-          ports:
-            - name: sip-tcp
-              protocol: TCP
-              containerPort: 5060
-            - name: sip-udp
-              protocol: UDP
-              containerPort: 5060
-            - name: ws-tcp
-              protocol: TCP
-              containerPort: 5064
-            - name: ws-udp
-              protocol: UDP
-              containerPort: 5064
-            - name: alg-tcp
-              protocol: TCP
-              containerPort: 7000
-            - name: alg-udp
-              protocol: UDP
-              containerPort: 7000
-          resources:
-            requests: 
-              cpu: 2
-              memory: 2G
-            # limits:
-            #   cpu:
-            #   memory:
-          readinessProbe:
-            exec:
-              command: ["kamctl", "monitor", "1", "|", "grep -q", "^Up"]
-            initialDelaySeconds: 10
-            timeoutSeconds: 10
-          livenessProbe:
-            exec:
-              command: ["kamctl", "monitor", "1", "|", "grep -q", "^Up"]
-            initialDelaySeconds: 30
-            timeoutSeconds: 10
-          imagePullPolicy: Always
-      restartPolicy: Always
+      - name: kamailio
+        image: callforamerica/kamailio
+        env:
+        - name: RABBITMQ_HOST_A
+          valueFrom:
+            configMapKeyRef:
+              name: rabbitmq-config
+              key: rabbitmq.host.a
+        - name: RABBITMQ_HOST_B
+          valueFrom:
+            configMapKeyRef:
+              name: rabbitmq-config
+              key: rabbitmq.host.b
+        - name: RABBITMQ_USER
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq-creds
+              key: rabbitmq.user
+        - name: RABBITMQ_PASS
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq-creds
+              key: rabbitmq.pass
+        - name: KAMAILIO_LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: kamailio-config
+              key: kamailio.log-level
+        - name: KAMAILIO_LOG_COLOR
+          valueFrom:
+            configMapKeyRef:
+              name: kamailio-config
+              key: kamailio.log-color
+        - name: KAMAILIO_ENABLE_SECONDARY_AMQP
+          valueFrom:
+            configMapKeyRef:
+              name: kamailio-config
+              key: kamailio.enable-secondary-amqp
+        - name: KAMAILIO_MY_WEBSOCKET_DOMAIN
+          valueFrom:
+            configMapKeyRef:
+              name: kamailio-config
+              key: kamailio.my-websocket-domain
+        - name: KAMAILIO_ENABLE_ROLES
+          valueFrom:
+            configMapKeyRef:
+              name: kamailio-config
+              key: kamailio.enable-roles
+        - name: KAMAILIO_FREESWITCH_SYNC_SOURCE
+          valueFrom:
+            configMapKeyRef:
+              name: kamailio-config
+              key: kamailio.freeswitch.sync.source
+        - name: KAMAILIO_FREESWITCH_SYNC_ARGS
+          valueFrom:
+            configMapKeyRef:
+              name: kamailio-config
+              key: kamailio.freeswitch.sync.args
+        - name: KAMAILIO_SHM_MEMORY
+          valueFrom:
+            configMapKeyRef:
+              name: kamailio-config
+              key: kamailio.shm-memory
+        - name: KAMAILIO_PKG_MEMORY
+          valueFrom:
+            configMapKeyRef:
+              name: kamailio-config
+              key: kamailio.pkg-memory
+        - name: KAMAILIO_CHILD_PROC
+          valueFrom:
+            configMapKeyRef:
+              name: kamailio-config
+              key: kamailio-child-proc
+        volumeMounts:
+        - name: volumes-ram
+          mountPath: /volumes/ram
+        ports:
+        - name: sip-tcp
+          protocol: TCP
+          containerPort: 5060
+        - name: sip-udp
+          protocol: UDP
+          containerPort: 5060
+        - name: sip-tls
+          protocol: TCP
+          containerPort: 5061
+        - name: ws-tcp
+          protocol: TCP
+          containerPort: 5064
+        - name: ws-udp
+          protocol: UDP
+          containerPort: 5064
+        - name: wss-tcp
+          protocol: TCP
+          containerPort: 5065
+        - name: wss-udp
+          protocol: UDP
+          containerPort: 5065
+        - name: alg-tcp
+          protocol: TCP
+          containerPort: 7000
+        - name: alg-udp
+          protocol: UDP
+          containerPort: 7000
+        - name: alg-tls
+          protocol: TCP
+          containerPort: 7001
+        resources:
+          requests: 
+            cpu: 2
+            memory: 2Gi
+          limits:
+            cpu: 2
+            memory: 2Gi
+        readinessProbe:
+          exec:
+            command: ["kamctl", "monitor", "1", "|", "grep -q", "^Up"]
+          initialDelaySeconds: 10
+          timeoutSeconds: 10
+        livenessProbe:
+          exec:
+            command: ["kamctl", "monitor", "1", "|", "grep -q", "^Up"]
+          initialDelaySeconds: 20
+          timeoutSeconds: 10
+        imagePullPolicy: Always
+      volumes:
+      - name: volumes-ram
+        emptyDir:
+          medium: Memory
+    restartPolicy: Always

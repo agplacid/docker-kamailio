@@ -9,21 +9,33 @@ spec:
     project: valuphone
     environment: production
   ports:
-    - name: sip-tcp
-      protocol: TCP
-      port: 5060
-    - name: sip-udp
-      protocol: UDP
-      port: 5060
-    - name: ws-tcp
-      protocol: TCP
-      port: 5064
-    - name: ws-udp
-      protocol: UDP
-      port: 5064
-    - name: alg-tcp
-      protocol: TCP
-      port: 7000
-    - name: alg-udp
-      protocol: UDP
-      port: 7000
+  - name: sip-tcp
+    protocol: TCP
+    port: 5060
+  - name: sip-udp
+    protocol: UDP
+    port: 5060
+  - name: sip-tls
+    protocol: TCP
+    port: 5061
+  - name: ws-tcp
+    protocol: TCP
+    port: 5064
+  - name: ws-udp
+    protocol: UDP
+    port: 5064
+  - name: wss-tcp
+    protocol: TCP
+    port: 5065
+  - name: wss-udp
+    protocol: UDP
+    port: 5065   
+  - name: alg-tcp
+    protocol: TCP
+    port: 7000
+  - name: alg-udp
+    protocol: UDP
+    port: 7000
+  - name: alg-tls
+    protocol: TCP
+    port: 7001
