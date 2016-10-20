@@ -22,12 +22,12 @@ spec:
         - name: RABBITMQ_HOST_A
           valueFrom:
             configMapKeyRef:
-              name: rabbitmq-config
+              name: environment-config
               key: rabbitmq.host.a
         - name: RABBITMQ_HOST_B
           valueFrom:
             configMapKeyRef:
-              name: rabbitmq-config
+              name: environment-config
               key: rabbitmq.host.b
         - name: RABBITMQ_USER
           valueFrom:
@@ -57,8 +57,8 @@ spec:
         - name: KAMAILIO_MY_WEBSOCKET_DOMAIN
           valueFrom:
             configMapKeyRef:
-              name: kamailio-config
-              key: kamailio.my-websocket-domain
+              name: company-config
+              key: company.domain
         - name: KAMAILIO_ENABLE_ROLES
           valueFrom:
             configMapKeyRef:
@@ -88,10 +88,13 @@ spec:
           valueFrom:
             configMapKeyRef:
               name: kamailio-config
-              key: kamailio-child-proc
+              key: kamailio.child-proc
         volumeMounts:
         - name: volumes-ram
           mountPath: /volumes/ram
+        - name: tls
+          mountPath: /volumes/tls
+          readOnly: true
         ports:
         - name: sip-tcp
           protocol: TCP
@@ -123,13 +126,13 @@ spec:
         - name: alg-tls
           protocol: TCP
           containerPort: 7001
-        resources:
-          requests: 
-            cpu: 2
-            memory: 2Gi
-          limits:
-            cpu: 2
-            memory: 2Gi
+        # resources:
+        #   requests: 
+        #     cpu: 2
+        #     memory: 2Gi
+        #   limits:
+        #     cpu: 2
+        #     memory: 2Gi
         readinessProbe:
           exec:
             command: ["kamctl", "monitor", "1", "|", "grep -q", "^Up"]
@@ -145,4 +148,7 @@ spec:
       - name: volumes-ram
         emptyDir:
           medium: Memory
-    restartPolicy: Always
+      - name: tls
+        secret:
+          secretName: wss-valuphone-com-tls
+      restartPolicy: Always

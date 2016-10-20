@@ -10,10 +10,9 @@ data:
   kamailio.log-level: info
   kamailio.log-color: 'true'
   kamailio.enable-secondary-amqp: 'true'
-  kamailio.my-websocket-domain: sip.li
-  kamailio.shm-memory: 128
-  kamailio.pkg-memory: 8
-  kamailio.child-proc: 8
-  kamailio.enable-roles: websockets,message
-  kamailio.freeswitch-sync-source: kubernetes
-  kamailio.freeswitch-sync-args: freeswitch
+  kamailio.shm-memory: '128'
+  kamailio.pkg-memory: '8'
+  kamailio.child-proc: '8'
+  kamailio.enable-roles: websockets,message,tls,presence_query,presence_sync,presence_notify_sync
+  kamailio.freeswitch.sync.source: kubernetes
+  kamailio.freeswitch.sync.args: freeswitch
