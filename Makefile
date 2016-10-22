@@ -13,9 +13,10 @@ GITHUB_REPO = docker-kamailio
 DOCKER_REPO = kamailio
 BUILD_BRANCH = master
 
-VOLUME_ARGS = --tmpfs /volumes/ram:size=32M
+VOLUME_ARGS = --tmpfs /volumes/ram:size=32M -v "$(PWD)/tls:/volumes/tls"
 ENV_ARGS = --env-file default.env
 PORT_ARGS = -p "5060-5061:5060-5061" -p "5060:5060/udp" -p "5064-5065:5064-5065" -p "5064-5065:5064-5065/udp" -p "7000-7001:7000-7001" -p "7000:7000/udp"
+CAP_ARGS = --cap-add IPC_LOCK --cap-add SYS_NICE --cap-add SYS_RESOURCE --cap-add NET_ADMIN --cap-add NET_RAW --cap-add NET_BROADCAST
 SHELL = bash -l
 
 -include ../Makefile.inc
@@ -52,17 +53,33 @@ shell:
 	@docker exec -ti $(NAME) $(SHELL)
 
 run:
-	@docker run -it --rm --name $(NAME) -h $(NAME).local --env-file run.env $(VOLUME_ARGS) $(LOCAL_TAG) $(SHELL)
+	@docker run -it --rm --name $(NAME) -h $(NAME).local --env-file run.env $(VOLUME_ARGS) $(CAP_ARGS) $(LOCAL_TAG) $(SHELL)
 
 launch:
-	@docker run -d --name $(NAME) -h $(NAME).local $(ENV_ARGS) $(VOLUME_ARGS) $(PORT_ARGS) $(LOCAL_TAG)
+	@docker run -d --name $(NAME) -h $(NAME).local $(ENV_ARGS) $(VOLUME_ARGS) $(PORT_ARGS) $(CAP_ARGS) $(LOCAL_TAG)
 
 launch-net:
-	@docker run -d --name $(NAME) -h $(NAME).local $(ENV_ARGS) $(VOLUME_ARGS) $(PORT_ARGS) --network local --net-alias $(NAME).local $(LOCAL_TAG)
+	@docker run -d --name $(NAME) -h $(NAME).local $(ENV_ARGS) $(VOLUME_ARGS) $(PORT_ARGS) $(CAP_ARGS) --network local --net-alias $(NAME).local $(LOCAL_TAG)
 
 launch-deps:
 	-cd ../docker-rabbitmq && make launch-as-dep
 	-cd ../docker-freeswitch && make launch-as-dep
+
+rmf-deps:
+	-cd ../docker-rabbitmq && make rmf-as-dep
+	-cd ../docker-freeswitch && make rmf-as-dep
+
+launch-dev:
+	@$(MAKE) launch-net
+
+rmf-dev:
+	@$(MAKE) rmf
+
+launch-as-dep:
+	@$(MAKE) launch-net
+
+rmf-as-dep:
+	@$(MAKE) rmf
 
 create-network:
 	@docker network create -d bridge local

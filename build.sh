@@ -16,7 +16,7 @@ useradd --home-dir ~ --create-home --shell=/bin/bash --user-group $user
 
 echo "Installing dependencies ..."
 apt-get update
-apt-get install -y curl ca-certificates git dnsutils jq
+apt-get install -y curl ca-certificates git dnsutils jq libcap2-bin
 
 
 echo "Installing $app repo ..."
@@ -42,40 +42,73 @@ apt-get install -y \
 
 
 echo "Configuring kamailio ..."
-rm -rf /etc/kamailio/*
+rm -rf /etc/kamailio
 
-cd /tmp
-	git clone -b master --single-branch --depth 1 \
-		https://github.com/2600hz/kazoo-configs kazoo-configs
-	pushd $_
-		find -mindepth 1 -maxdepth 1 -not -name kamailio -exec rm -rf {} \;
+mkdir /tmp/configs
+pushd $_
+    git clone -b $KAZOO_CONFIGS_BRANCH --single-branch --depth 1 \
+        https://github.com/2600hz/kazoo-configs .
 
-		echo "Fixing /etc paths: /etc/kazoo/kamailio > /etc/kamailio ..."
-		for f in $(grep -rl '/etc/kazoo/kamailio' *)
-		do
-		    sed -i -r 's/\/etc\/kazoo\/kamailio/\/etc\/kamailio/g' $f
-		    grep '/etc/k' $f
-		done
+    find -mindepth 1 -maxdepth 1 -not -name kamailio -exec rm -rf {} \;
+#!substdef "!KAZOO_DB_URL!text:///etc/kazoo/kamailio/dbtext!g"
+    echo "Fixing /etc paths: /etc/kazoo/kamailio > /etc/kamailio ..."
+    for f in $(grep -rl '/etc/kazoo/kamailio' *)
+    do
+        sed -i -r 's/\/etc\/kazoo\/kamailio/\/etc\/kamailio/g' $f
+        grep '/etc/k' $f
+    done
 
-		echo "Fixing /lib paths: /usr/lib/64 + /usr/lib/x86_64-linux-gnu ..."
-		sed -i '\|^mpath=|s|"\(.*\)"|"\1:/usr/lib/x86_64-linux-gnu/kamailio/modules/"|' kamailio/default.cfg
-		grep 'mpath' $_
+    echo "Fixing /lib paths: /usr/lib/64 + /usr/lib/x86_64-linux-gnu ..."
+    sed -i '\|^mpath=|s|"\(.*\)"|"\1:/usr/lib/x86_64-linux-gnu/kamailio/modules/"|' kamailio/default.cfg
+    grep 'mpath' $_
 
-        echo "Fixing tls certificate settings ..."
-        sed -i '/^method/s/\b[[:alnum:]]*$/TLSv1/' kamailio/tls.cfg
-        sed -i '\|^certificate|s|\(.*\)=\(.*\)|\1= /volumes/tls/tls.crt|' $_
-        sed -i '\|^private_key|s|\(.*\)=\(.*\)|\1= /volumes/tls/tls.key|' $_
-        cat $_
+    echo "Fixing tls certificate settings ..."
+    sed -i '/^method/s/\b[[:alnum:]]*$/TLSv1/' kamailio/tls.cfg
+    sed -i '\|^certificate|s|\(.*\)=\(.*\)|\1= /volumes/tls/tls.crt|' $_
+    sed -i '\|^private_key|s|\(.*\)=\(.*\)|\1= /volumes/tls/tls.key|' $_
+    cat $_
 
-        echo "Moving dbtext to /volumes/ram/dbtext ..."
-        sed -i '/MY_WEBSOCKET_DOMAIN/a \
-            \
-            #!ifndef KAZOO_DB_URL
-            #!substdef "!KAZOO_DB_URL!text:///volumes/ram/dbtext!g"
-            #!endif' kamailio/local.cfg
+    rm -rf kamailio/certs
+    echo "Adding KAZOO_DB_URL section to local.cfg"
+    sed -i '/MY_WEBSOCKET_DOMAIN/a \
+\
+## Defining KAZOO_DB_URL here so I can run it off of a ramfs \
+#!ifndef KAZOO_DB_URL \
+#!substdef "!KAZOO_DB_URL!text:///volumes/ram/dbtext!g" \
+#!endif' kamailio/local.cfg
 
-		mv kamailio/* /etc/kamailio/
-		popd && rm -rf $OLDPWD
+    if grep -q MY_AMQP_URL_SECONDARY kamailio/default.cfg
+    then
+        echo "Fixing secondary and tertiary amqp url substring collision bug in default.cfg ..."
+        sed -i 's/MY_AMQP_URL_SECONDARY/MY_SECONDARY_AMQP_URL/g' kamailio/default.cfg
+        sed -i 's/MY_AMQP_URL_TERTIARY/MY_TERTIARY_AMQP_URL/g' kamailio/default.cfg
+    fi
+
+    echo "Adding secondary and tertiary amqp url substring sections (commented) to local.cfg"
+    sed -i "\|MY_AMQP_URL|a \\
+# # #!substdef \"!MY_SECONDARY_AMQP_URL!kazoo://guest:guest@127.0.0.1:5672!g\" \\
+# # #!substdef \"!MY_TERTIARY_AMQP_URL!kazoo://guest:guest@127.0.0.1:5672!g\"" kamailio/local.cfg
+    
+    echo "We're in docker so let's set logging to stderr ..."
+    sed -i '/log_stderror/s/\b\w*$/yes/' kamailio/default.cfg
+
+    echo "Setting user and group in config"
+    sed -i '/Global Parameters/a \user = "kamailio"' kamailio/default.cfg
+    sed -i '/Global Parameters/a \group = "kamailio"' kamailio/default.cfg
+    
+    sed -i '/DNS Parameters/a \dns_use_search_list = no' kamailio/default.cfg
+    sed -i '/use_dns_failover/s/\b\w*$/on/' kamailio/default.cfg
+    sed -i '/dns_srv_lb/s/\b\w*$/on/' kamailio/default.cfg
+    sed -i '/dns_try_naptr/s/\b\w*$/on/' kamailio/default.cfg
+
+    echo "Fixing usage error in presence_notify_sync-role.cfg ..."
+    sed -i '/onreply_route\[PRESENCE_NOTIFY_FAULT\]/s/onreply/failure/' kamailio/presence_notify_sync-role.cfg
+
+    echo "Whitelabeling headers ..."
+    sed -i '/server_header/s/".*"/"Server: K"/' kamailio/default.cfg
+    sed -i '/user_agent_header/s/".*"/"User-Agent: K"/' kamailio/default.cfg
+    mv kamailio /etc/
+    popd && rm -rf $OLDPWD
 
 
 echo "Creating tls path ..."

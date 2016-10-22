@@ -2,8 +2,8 @@
 
 set -e
 
-dispatcher_path=/volumes/ram/dbtext/dispatcher
-kube_token_path=/var/run/secrets/kubernetes.io/serviceaccount/token
+: ${DISPATCHER_PATH:=/volumes/ram/dbtext/dispatcher}
+: ${KUBE_TOKEN_PATH:=/var/run/secrets/kubernetes.io/serviceaccount/token}
 
 user=kamailio
 
@@ -46,19 +46,19 @@ function get_freeswitch_servers_kubernetes
     
     if ! which jq > /dev/null 
         then
-        errlog "\njq not installed"
+        errlog "jq not installed"
         return 1
     elif ! which jq > /dev/null
     then
-        errlog "\ncurl not installed"
+        errlog "curl not installed"
         return 1
     fi
 
-    if [[ -f $kube_token_path ]]
+    if [[ -f $KUBE_TOKEN_PATH ]]
     then
-        local kube_token=$(cat $kube_token_path)
+        local kube_token=$(cat $KUBE_TOKEN_PATH)
     else
-        errlog "\npath for kube token: $kube_token_path is invalid"
+        errlog "path for kube token: $KUBE_TOKEN_PATH is invalid"
         return 1
     fi
 
@@ -145,13 +145,13 @@ function clean_input
 
 function clear_dispatcher
 {
-    sed -i '/^id/!d' $dispatcher_path
+    sed -i '/^id/!d' $DISPATCHER_PATH
 }
 
 function add_server_to_dispatcher
 {
     local server=$1
-    echo "1:1:sip\:$server\:11000:0:1: : " >> $dispatcher_path
+    echo "1:1:sip\:$server\:11000:0:1: : " >> $DISPATCHER_PATH
 }
 
 function add_fs_servers
@@ -172,7 +172,7 @@ function add_fs_servers
 
 function show_dispatcher
 {
-    cat $dispatcher_path | tail -n +2 >&2
+    cat $DISPATCHER_PATH | tail -n +2 >&2
 }
 
 function usage

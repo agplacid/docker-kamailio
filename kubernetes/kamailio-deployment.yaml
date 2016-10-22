@@ -18,6 +18,10 @@ spec:
       containers:
       - name: kamailio
         image: callforamerica/kamailio
+        capabilities:
+          add:
+          - IPC_LOCK
+          - NET_RAW
         env:
         - name: RABBITMQ_HOST_A
           valueFrom:
@@ -29,16 +33,21 @@ spec:
             configMapKeyRef:
               name: environment-config
               key: rabbitmq.host.b
+        # Comment until switching over to 4.0
+        # - name: RABBITMQ_USER
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: rabbitmq-creds
+        #       key: rabbitmq.user
+        # - name: RABBITMQ_PASS
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: rabbitmq-creds
+        #       key: rabbitmq.pass
         - name: RABBITMQ_USER
-          valueFrom:
-            secretKeyRef:
-              name: rabbitmq-creds
-              key: rabbitmq.user
+          value: guest
         - name: RABBITMQ_PASS
-          valueFrom:
-            secretKeyRef:
-              name: rabbitmq-creds
-              key: rabbitmq.pass
+          value: guest
         - name: KAMAILIO_LOG_LEVEL
           valueFrom:
             configMapKeyRef:

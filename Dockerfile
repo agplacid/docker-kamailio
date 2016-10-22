@@ -3,8 +3,10 @@ FROM callforamerica/debian
 MAINTAINER joe <joe@valuphone.com>
 
 ARG     KAMAILIO_VERSION
+ARG     KAZOO_CONFIGS_BRANCH
 
-ENV     KAMAILIO_VERSION=${KAMAILIO_VERSION:-4.4.3}
+ENV     KAMAILIO_VERSION=${KAMAILIO_VERSION:-4.4.3} \
+        KAZOO_CONFIGS_BRANCH=${KAZOO_CONFIGS_BRANCH:-master}
 
 LABEL   app.kamailio.version=$KAMAILIO_VERSION
 
@@ -15,6 +17,7 @@ RUN     /tmp/build.sh
 
 COPY    entrypoint /
 COPY    sync-freeswitch-servers /usr/local/bin/
+COPY    protocols /etc/
 
 ENV     KAMAILIO_LOG_LEVEL=info \
         KAMAILIO_ENABLE_ROLES=websockets,message

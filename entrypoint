@@ -11,8 +11,10 @@ declare -A LOG_LEVEL_MAP=(
     [notice]=L_NOTICE 
     [warn]=L_WARN
     [error]=L_ERR 
-    [critical]=L_CRIT 
-    [alert]=L_ALERT )
+    [critical]=L_CRIT
+    [critical2]=L_CRIT2
+    [bug]=L_BUG
+    [alert]=L_ALERT)
 
 if [ -f /etc/default/$app ]
 then
@@ -24,28 +26,31 @@ fi
 
 : ${RABBITMQ_HOST_A:=rabbitmq-alpha}
 : ${RABBITMQ_HOST_B:=rabbitmq-beta}
+: ${RABBITMQ_HOST_D:=rabbitmq-delta}
 
 # accepts: debug info notice warn error critical alert
 : ${KAMAILIO_LOG_LEVEL:=info}
 : ${KAMAILIO_LOG_COLOR:=true}
 
 : ${KAMAILIO_ENABLE_SECONDARY_AMQP:=false}
+: ${KAMAILIO_ENABLE_TERTIARY_AMQP:=false}
 
 : ${KAMAILIO_MY_HOSTNAME:=$(hostname -f)}
 : ${KAMAILIO_MY_IP_ADDRESS:=$(hostname -i | head -1)}
 : ${KAMAILIO_MY_AMQP_URL:=kazoo://$RABBITMQ_USER:$RABBITMQ_PASS@$RABBITMQ_HOST_A:5672}
 : ${KAMAILIO_MY_AMQP_URL_SECONDARY:=kazoo://$RABBITMQ_USER:$RABBITMQ_PASS@$RABBITMQ_HOST_B:5672}
-: ${KAMAILIO_MY_WEBSOCKET_DOMAIN:=sip.li}
+: ${KAMAILIO_MY_AMQP_URL_TERTIARY:=kazoo://$RABBITMQ_USER:$RABBITMQ_PASS@$RABBITMQ_HOST_D:5672}
 
-: ${KAMAILIO_SHM_MEMORY:=128}
-: ${KAMAILIO_PKG_MEMORY:=8}
-: ${KAMAILIO_CHILD_PROC:=8}
+: ${KAMAILIO_MY_WEBSOCKET_DOMAIN:=valuphone.com}
+
+: ${KAMAILIO_SHM_MEMORY:=256}
+: ${KAMAILIO_PKG_MEMORY:=12}
+: ${KAMAILIO_CHILD_PROC:=$(expr $(nproc) / 2 + 2)}
 
 : ${KAMAILIO_ENABLE_ROLES:=websockets,message}
 
 : ${KAMAILIO_FREESWITCH_SYNC_SOURCE:=dns}
 : ${KAMAILIO_FREESWITCH_SYNC_ARGS:=freeswitch}
-
 
 function log 
 {
@@ -53,55 +58,56 @@ function log
     echo -e "\E[36m[*]\E[0m ${msg}" 
 }
 
-# function get_freeswitch_nodes_dns
-# {
-#     local query=$(dig +short +search freeswitch)
-#     [[ -z $query ]] && return 1
-#     echo "$query"
-# }
+function errlog
+{
+    local msg="$1"
+    echo -e "\E[31m[x]\E[0m ${msg}" >&2
+}
 
-# function get_freeswitch_nodes_kubernetes
-# {
-
-#     local kube_token=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
-#     local query=$(curl -sSL -k -H "Authorization: Bearer $token" https://kubernetes/api/v1/endpoints | jq -r ".items[] | select(.metadata.name == \"freeswitch\") | .subsets[] | .addresses[] | .ip")
-#     [[ -z $query ]] && return 1
-#     echo "$query"
-# }
 
 log "Converting log level from $KAMAILIO_LOG_LEVEL ..."
 KAMAILIO_LOG_LEVEL=${LOG_LEVEL_MAP[${KAMAILIO_LOG_LEVEL,,}]}
 
 log "Setting log level to: $KAMAILIO_LOG_LEVEL ..."
-sed -i -r "/^debug /s/\w*$/${KAMAILIO_LOG_LEVEL}/" /etc/kamailio/local.cfg
+sed -i -r "/^debug /s/\w*$/$KAMAILIO_LOG_LEVEL/" /etc/kamailio/local.cfg
 
 
 log "Rewriting local.cfg ..."
-sed -i "/MY_HOSTNAME/s/\(MY_HOSTNAME\!\).*\(\!\)/\1${KAMAILIO_MY_HOSTNAME}\\2/" /etc/kamailio/local.cfg
-sed -i "/MY_IP_ADDRESS/s/\(MY_IP_ADDRESS\!\).*\(\!\)/\1${KAMAILIO_MY_IP_ADDRESS}\2/" /etc/kamailio/local.cfg 
-sed -i "/MY_AMQP_URL/s/\(MY_AMQP_URL\!\).*\(\!\)/\1${KAMAILIO_MY_AMQP_URL//\//\\\/}\2/" /etc/kamailio/local.cfg 
-sed -i "/MY_WEBSOCKET_DOMAIN/s/\(MY_WEBSOCKET_DOMAIN\!\).*\(\!\)/\1${KAMAILIO_MY_WEBSOCKET_DOMAIN}\2/" /etc/kamailio/local.cfg 
+sed -i "/MY_HOSTNAME/s/\(MY_HOSTNAME\!\).*\(\!\)/\1$KAMAILIO_MY_HOSTNAME\2/" /etc/kamailio/local.cfg
+sed -i "/MY_IP_ADDRESS/s/\(MY_IP_ADDRESS\!\).*\(\!\)/\1$KAMAILIO_MY_IP_ADDRESS\2/" /etc/kamailio/local.cfg 
+sed -i "\|MY_AMQP_URL|s|\(MY_AMQP_URL\!\).*\(\!\)|\1$KAMAILIO_MY_AMQP_URL\2|" /etc/kamailio/local.cfg 
+sed -i "/MY_WEBSOCKET_DOMAIN/s/\(MY_WEBSOCKET_DOMAIN\!\).*\(\!\)/\1$KAMAILIO_MY_WEBSOCKET_DOMAIN\2/" /etc/kamailio/local.cfg 
 
 
 if [[ $KAMAILIO_ENABLE_SECONDARY_AMQP = true ]]
 then
-    if ! grep -q MY_AMQP_URL_SECONDARY /etc/kamailio/local.cfg
+    log "Enabling secondary amqp server: $KAMAILIO_MY_AMQP_URL_SECONDARY ..."
+    if grep -q '^# # #\!.*MY_SECONDARY_AMQP_URL' /etc/kamailio/local.cfg
     then
-        sed -i "/MY_AMQP_URL/a \
-            \
-            #!substdef \"!MY_AMQP_URL_SECONDARY!${KAMAILIO_MY_AMQP_URL_SECONDARY//\//\\\/}!g\"" \
-                /etc/kamailio/local.cfg
-    else
-        sed -i "/MY_AMQP_URL_SECONDARY/s/\(MY_AMQP_URL_SECONDARY\!\).*\(\!\)/\1${KAMAILIO_MY_AMQP_URL_SECONDARY//\//\\\/}\2/" /etc/kamailio/local.cfg 
-    fi
+        sed -i '/MY_SECONDARY_AMQP_URL/s/^# # //' /etc/kamailio/local.cfg
+    fi 
+    sed -i "\|\!MY_SECONDARY_AMQP_URL|s|\(MY_SECONDARY_AMQP_URL\!\).*\(\!\)|\1$KAMAILIO_MY_AMQP_URL_SECONDARY\2|" /etc/kamailio/local.cfg 
 else
-    if grep -q MY_AMQP_URL_SECONDARY /etc/kamailio/local.cfg
+    if grep -q '^#\!.*MY_SECONDARY_AMQP_URL' /etc/kamailio/local.cfg
     then
-        sed -i '/MY_AMQP_URL_SECONDARY/d' /etc/kamailio/local.cfg
+        sed -i '/MY_SECONDARY_AMQP_URL/s/^/# # /' /etc/kamailio/local.cfg
     fi
 fi
 
-cat /etc/kamailio/local.cfg | tail -n 94 | head -n 25
+if [[ $KAMAILIO_ENABLE_TERTIARY_AMQP = true ]]
+then
+    log "Enabling tertiary amqp server: $KAMAILIO_MY_AMQP_URL_TERTIARY ..."
+    if grep -q '^# # #\!.*MY_TERTIARY_AMQP_URL' /etc/kamailio/local.cfg
+    then
+        sed -i '/MY_TERTIARY_AMQP_URL/s/^# # //' /etc/kamailio/local.cfg
+    fi 
+    sed -i "\|\!MY_TERTIARY_AMQP_URL|s|\(MY_TERTIARY_AMQP_URL\!\).*\(\!\)|\1$KAMAILIO_MY_AMQP_URL_TERTIARY\2|" /etc/kamailio/local.cfg 
+else
+    if grep -q '^#\!.*MY_TERTIARY_AMQP_URL' /etc/kamailio/local.cfg
+    then
+        sed -i '/MY_TERTIARY_AMQP_URL/s/^/# # /' /etc/kamailio/local.cfg
+    fi
+fi
 
 
 log "Enabling roles: ${KAMAILIO_ENABLE_ROLES} in local.cfg ..."
@@ -111,90 +117,75 @@ then
     do 
         sed -i "/${role^^}_ROLE/s/# # //" /etc/kamailio/local.cfg
     done
-
-    cat /etc/kamailio/local.cfg | head -n 30 | tail -n 22 
 fi
+
+cat /etc/kamailio/local.cfg
+
 
 log "Copying dbtext files to /volumes/ram/dbtext ..."
 mkdir -p /volumes/ram/dbtext
 cp -R /etc/kamailio/dbtext/* /volumes/ram/dbtext
-chown -R $user:$user /volumes/ram/dbtext
 
 
 log "Syncing freeswitch servers ..."
 sync-freeswitch-servers $KAMAILIO_FREESWITCH_SYNC_SOURCE $KAMAILIO_FREESWITCH_SYNC_ARGS
 
-# until get_freeswitch_nodes
-# do
-#     echo "waiting on freeswitch nodes ..."
-#     sleep 5  
-# done
 
-# case "$KAMAILIO_GET_FREESWITCH_NODES_FROM" in
-#     local)
-#         : ${FREESWITCH_NODES:=freeswitch.local}
-#         ;;
-#     dns)
-#         echo -n "Querying DNS for freeswitch nodes ."
-#         until [[ ! -z $FREESWITCH_NODES ]]
-#         do
-#             sleep 1
-#             FREESWITCH_NODES=$(get_freeswitch_nodes_dns)
-#             echo -n '.'
-#         done
-#         ;;
-#     kubernetes)
-#         echo -n "Querying kubernetes for freeswitch nodes ."
-#         until [[ ! -z $FREESWITCH_NODES ]]
-#         do
-#             sleep 1
-#             FREESWITCH_NODES=$(get_freeswitch_nodes_kubernetes)
-#             echo -n '.'
-#         done
-#         ;;
-#     *)
-#         : ${FREESWITCH_NODES:=}  
-#         ;;
-# esac
+log "Applying performance enhancements ..."
+if capsh --supports=cap_sys_resource
+then
+    log "Setting ulimits ..."
+    ulimit -c unlimited # max core files size
+    ulimit -d unlimited # max proc data segment size
+    ulimit -f unlimited # max file size
+    ulimit -l unlimited # max locked memory size
+    ulimit -n 999999    # max file descriptors
+    ulimit -m unlimited # max memory size
+    ulimit -s 240       # max stack size soft
+    ulimit -H -s 240    # max stack size hard
+    ulimit -t unlimited # max cpu time
+    ulimit -u unlimited # max procs
+    ulimit -v unlimited # max virtual memory size
+    ulimit -e 31        # max scheduling priority
+    ulimit -x unlimited # max file locks
+    ulimit -i unlimited # max pending signals
+    ulimit -q unlimited # max msg queue size
+    ulimit -r 70        # max realtime priority
+    ulimit -a
+else
+    errlog "Capability to set resource limits is restricted in this container. For best performance please run container with --cap-add SYS_RESOURCE"
+fi
 
-# [[ ! -z $FREESWITCH_NODES ]] && echo "Got freeswitch nodes: $FREESWITCH_NODES"
+if capsh --supports=cap_sys_nice
+then
+    log "Setting nice level to -11 ..."
+    renice -11 $$
+    log "Enabling real-time priority settings ..."
+    sed -i '/Global Parameters/a \
+real_time = 7 \
+rt_prio = 70 \
+rt_policy = 2 \
+rt_timer1_prio = 70 \
+rt_timer1_policy = 2 \
+rt_timer2_prio = 70 \
+rt_timer2_policy = 2' /etc/kamailio/default.cfg
+else
+    errlog "Capability to set nice level is restricted in this container. For best performance please run container with --cap-add SYS_NICE"
+fi
 
-# echo "Getting freeswitch nodes ..."
-# if [[ $KAMAILIO_GET_FREESWITCH_NODES_FROM = 'local' ]]
-# then
-#     : ${FREESWITCH_NODES:=freeswitch.local}
-# elif [[ $KAMAILIO_GET_FREESWITCH_NODES_FROM = 'dns' ]]
-# then
-#     echo -n "Querying DNS for freeswitch nodes ."
-#     until [[ ! -z $FREESWITCH_NODES ]]
-#     do
-#         sleep 1
-#         FREESWITCH_NODES=$(get_freeswitch_nodes_dns)
-#         echo -n '.'
-#     done
-# elif [[ $KAMAILIO]]
-# else
-#     : ${FREESWITCH_NODES:=}
-# fi
+if ! capsh --supports=cap_net_raw
+then
+    errlog "Capability to use raw sockets restricted in container. For best performance please run container with --cap-add NET_RAW"
+fi
 
-# [[ ! -z $FREESWITCH_NODES ]] && echo "Got freeswitch nodes: $FREESWITCH_NODES"
-
-
-# echo "Adding freeswitch nodes to dispatcher ..."
-# if [[ ! -z $FREESWITCH_NODES ]]
-# then
-#     sed -i '/sip\\:/d' /etc/kamailio/dbtext/dispatcher
-    
-#     for node in $(echo $FREESWITCH_NODES); do
-#         echo "1:1:sip\:$node\:11000:0:1: : " >> /etc/kamailio/dbtext/dispatcher
-#     done
-    
-#     cat /etc/kamailio/dbtext/dispatcher
-# fi
+if ! capsh --supports=cap_ipc_lock
+then
+    errlog "Capability to lock ipc restricted in container. For best performance please run container with --cap-add IPC_LOCK"
+fi
 
 
 log "Ensuring Permissions ..."
-chown -R $user:$user /etc/kamailio
+chown -R $user:$user /etc/kamailio /volumes/ram /volumes/tls
 
 
 log "Building arguments ..."
@@ -203,4 +194,4 @@ log "Building arguments ..."
 
 log "Starting $app ..."
 cd ~
-    exec kamailio -DD -E -m $KAMAILIO_SHM_MEMORY -M $KAMAILIO_PKG_MEMORY -u $user -g $user -n $KAMAILIO_CHILD_PROC $CLOG_ARGS 2>&1
+    exec kamailio -DD -m $KAMAILIO_SHM_MEMORY -M $KAMAILIO_PKG_MEMORY -n $KAMAILIO_CHILD_PROC $CLOG_ARGS 2>&1
