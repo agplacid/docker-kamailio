@@ -72,6 +72,13 @@ log "Setting log level to: $KAMAILIO_LOG_LEVEL ..."
 sed -i -r "/^debug /s/\w*$/$KAMAILIO_LOG_LEVEL/" /etc/kamailio/local.cfg
 
 
+mtu=$(ip -o link show $(routel 2> /dev/null | grep default | awk '{print $3}') | sed '/mtu/s/.*mtu \([[:digit:]]\+\).*/\1/')
+if $mtu -gt 1300
+then
+    log "Setting mtu to $mtu"
+    sed "/udp4_raw_mtu/s/\b[[:digit:]]\+$/$mtu/" /etc/kamailio/local.cfg
+fi
+
 log "Rewriting local.cfg ..."
 sed -i "/MY_HOSTNAME/s/\(MY_HOSTNAME\!\).*\(\!\)/\1$KAMAILIO_MY_HOSTNAME\2/" /etc/kamailio/local.cfg
 sed -i "/MY_IP_ADDRESS/s/\(MY_IP_ADDRESS\!\).*\(\!\)/\1$KAMAILIO_MY_IP_ADDRESS\2/" /etc/kamailio/local.cfg 

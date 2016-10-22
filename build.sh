@@ -16,7 +16,7 @@ useradd --home-dir ~ --create-home --shell=/bin/bash --user-group $user
 
 echo "Installing dependencies ..."
 apt-get update
-apt-get install -y curl ca-certificates git dnsutils jq libcap2-bin
+apt-get install -y curl ca-certificates git dnsutils jq libcap2-bin iproute2
 
 
 echo "Installing $app repo ..."
@@ -50,7 +50,8 @@ pushd $_
         https://github.com/2600hz/kazoo-configs .
 
     find -mindepth 1 -maxdepth 1 -not -name kamailio -exec rm -rf {} \;
-#!substdef "!KAZOO_DB_URL!text:///etc/kazoo/kamailio/dbtext!g"
+    rm -rf kamailio/certs
+
     echo "Fixing /etc paths: /etc/kazoo/kamailio > /etc/kamailio ..."
     for f in $(grep -rl '/etc/kazoo/kamailio' *)
     do
@@ -68,7 +69,6 @@ pushd $_
     sed -i '\|^private_key|s|\(.*\)=\(.*\)|\1= /volumes/tls/tls.key|' $_
     cat $_
 
-    rm -rf kamailio/certs
     echo "Adding KAZOO_DB_URL section to local.cfg"
     sed -i '/MY_WEBSOCKET_DOMAIN/a \
 \
@@ -77,36 +77,40 @@ pushd $_
 #!substdef "!KAZOO_DB_URL!text:///volumes/ram/dbtext!g" \
 #!endif' kamailio/local.cfg
 
-    if grep -q MY_AMQP_URL_SECONDARY kamailio/default.cfg
-    then
-        echo "Fixing secondary and tertiary amqp url substring collision bug in default.cfg ..."
-        sed -i 's/MY_AMQP_URL_SECONDARY/MY_SECONDARY_AMQP_URL/g' kamailio/default.cfg
-        sed -i 's/MY_AMQP_URL_TERTIARY/MY_TERTIARY_AMQP_URL/g' kamailio/default.cfg
-    fi
-
     echo "Adding secondary and tertiary amqp url substring sections (commented) to local.cfg"
     sed -i "\|MY_AMQP_URL|a \\
 # # #!substdef \"!MY_SECONDARY_AMQP_URL!kazoo://guest:guest@127.0.0.1:5672!g\" \\
 # # #!substdef \"!MY_TERTIARY_AMQP_URL!kazoo://guest:guest@127.0.0.1:5672!g\"" kamailio/local.cfg
+    
+    sed -i '/udp4_raw_mtu/s/# \(.*\)\b[[:digit:]]\+$/\11500/' $_
+
+    if grep -q MY_AMQP_URL_SECONDARY kamailio/default.cfg
+    then
+        echo "Fixing secondary and tertiary amqp url substring collision bug in default.cfg ..."
+        sed -i 's/MY_AMQP_URL_SECONDARY/MY_SECONDARY_AMQP_URL/g' kamailio/default.cfg
+        sed -i 's/MY_AMQP_URL_TERTIARY/MY_TERTIARY_AMQP_URL/g' $_
+    fi
     
     echo "We're in docker so let's set logging to stderr ..."
     sed -i '/log_stderror/s/\b\w*$/yes/' kamailio/default.cfg
 
     echo "Setting user and group in config"
     sed -i '/Global Parameters/a \user = "kamailio"' kamailio/default.cfg
-    sed -i '/Global Parameters/a \group = "kamailio"' kamailio/default.cfg
+    sed -i '/Global Parameters/a \group = "kamailio"' $_
     
+    echo "Setting DNS settings ..."
     sed -i '/DNS Parameters/a \dns_use_search_list = no' kamailio/default.cfg
-    sed -i '/use_dns_failover/s/\b\w*$/on/' kamailio/default.cfg
-    sed -i '/dns_srv_lb/s/\b\w*$/on/' kamailio/default.cfg
-    sed -i '/dns_try_naptr/s/\b\w*$/on/' kamailio/default.cfg
+    sed -i '/use_dns_failover/s/\b\w*$/on/' $_
+    sed -i '/dns_srv_lb/s/\b\w*$/on/' $_
+    sed -i '/dns_try_naptr/s/\b\w*$/on/' $_
 
     echo "Fixing usage error in presence_notify_sync-role.cfg ..."
     sed -i '/onreply_route\[PRESENCE_NOTIFY_FAULT\]/s/onreply/failure/' kamailio/presence_notify_sync-role.cfg
 
     echo "Whitelabeling headers ..."
     sed -i '/server_header/s/".*"/"Server: K"/' kamailio/default.cfg
-    sed -i '/user_agent_header/s/".*"/"User-Agent: K"/' kamailio/default.cfg
+    sed -i '/user_agent_header/s/".*"/"User-Agent: K"/' $_
+
     mv kamailio /etc/
     popd && rm -rf $OLDPWD
 
