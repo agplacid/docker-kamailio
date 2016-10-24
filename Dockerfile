@@ -15,7 +15,7 @@ ENV     HOME=/opt/kamailio
 COPY    build.sh /tmp/
 RUN     /tmp/build.sh
 
-COPY    entrypoint /
+COPY    entrypoint /entrypoint
 COPY    sync-freeswitch-servers /usr/local/bin/
 COPY    protocols /etc/
 
