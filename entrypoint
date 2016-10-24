@@ -73,7 +73,7 @@ sed -i -r "/^debug /s/\w*$/$KAMAILIO_LOG_LEVEL/" /etc/kamailio/local.cfg
 
 
 mtu=$(ip -o link show $(routel 2> /dev/null | grep default | awk '{print $3}') | sed '/mtu/s/.*mtu \([[:digit:]]\+\).*/\1/')
-if $mtu -gt 1300
+if [[ $mtu -gt 1300 ]]
 then
     log "Setting mtu to $mtu"
     sed "/udp4_raw_mtu/s/\b[[:digit:]]\+$/$mtu/" /etc/kamailio/local.cfg
@@ -139,7 +139,7 @@ sync-freeswitch-servers $KAMAILIO_FREESWITCH_SYNC_SOURCE $KAMAILIO_FREESWITCH_SY
 
 
 log "Applying performance enhancements ..."
-if capsh --supports=cap_sys_resource
+if capsh --print | grep -q cap_sys_resource
 then
     log "Setting ulimits ..."
     ulimit -c unlimited # max core files size
@@ -163,7 +163,7 @@ else
     errlog "Capability to set resource limits is restricted in this container. For best performance please run container with --cap-add SYS_RESOURCE"
 fi
 
-if capsh --supports=cap_sys_nice
+if capsh --print | grep -q cap_sys_nice
 then
     log "Setting nice level to -11 ..."
     renice -11 $$
@@ -180,12 +180,12 @@ else
     errlog "Capability to set nice level is restricted in this container. For best performance please run container with --cap-add SYS_NICE"
 fi
 
-if ! capsh --supports=cap_net_raw
+if ! capsh --print | grep -q cap_net_raw
 then
     errlog "Capability to use raw sockets restricted in container. For best performance please run container with --cap-add NET_RAW"
 fi
 
-if ! capsh --supports=cap_ipc_lock
+if ! capsh --print | grep -q cap_ipc_lock
 then
     errlog "Capability to lock ipc restricted in container. For best performance please run container with --cap-add IPC_LOCK"
 fi
