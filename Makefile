@@ -1,151 +1,122 @@
-NS = vp
-NAME = kamailio
-APP_VERSION = 4.4.3
-IMAGE_VERSION = 2.0
-VERSION = $(APP_VERSION)-$(IMAGE_VERSION)
-LOCAL_TAG = $(NS)/$(NAME):$(VERSION)
+SHELL = /bin/zsh
+SHELLFLAGS = -c
 
-REGISTRY = callforamerica
-ORG = vp
-REMOTE_TAG = $(REGISTRY)/$(NAME):$(VERSION)
+NAME := $(shell basename $(PWD) | cut -d'-' -f2)
+BRANCH ?= $(shell basename $(shell git status | head -1 | rev | cut -d" " -f1 | rev))
+ifeq ($(BRANCH),master)
+	TAG := latest
+else
+	TAG := $(BRANCH)
+endif
+DOCKER_USER ?= callforamerica
+DOCKER_IMAGE := $(DOCKER_USER)/$(NAME):$(TAG)
 
-GITHUB_REPO = docker-kamailio
-DOCKER_REPO = kamailio
-BUILD_BRANCH = master
+BUILD_TOKEN = 9c143327-b64c-4231-8388-26444cdf465b
 
-VOLUME_ARGS = --tmpfs /volumes/ram:size=32M -v "$(PWD)/tls:/volumes/tls"
+CSHELL = bash -l
+# VOLUME_ARGS = --tmpfs /volumes/$(NAME)/dbtext:size=32M -v "$(PWD)/tls:/volumes/$(NAME)/tls"
 ENV_ARGS = --env-file default.env
 PORT_ARGS = -p "5060-5061:5060-5061" -p "5060:5060/udp" -p "5064-5065:5064-5065" -p "5064-5065:5064-5065/udp" -p "7000-7001:7000-7001" -p "7000:7000/udp"
-CAP_ARGS = --cap-add IPC_LOCK --cap-add SYS_NICE --cap-add SYS_RESOURCE --cap-add NET_ADMIN --cap-add NET_RAW --cap-add NET_BROADCAST
-SHELL = bash -l
+CAP_ARGS = --cap-add IPC_LOCK --cap-add SYS_NICE --cap-add SYS_RESOURCE --cap-add NET_RAW
 
 -include ../Makefile.inc
 
-.PHONY: all build test release shell run start stop rm rmi default
-
-all: build
-
-checkout:
-	@git checkout $(BUILD_BRANCH)
+.PHONY: all build rebuild tag info test create-network run launch shell launch-as-dep
+.PHONY: rmf-as-dep logs start kill stop rm rmi rmf hub-login hub-push hub-build
+.PHONY: kube-local kube-local-rm kube-deploy kube-rm
 
 build:
-	@docker build -t $(LOCAL_TAG) --force-rm .
-	$(MAKE) tag
-	$(MAKE) dclean
-
-tag:
-	@docker tag $(LOCAL_TAG) $(REMOTE_TAG)
+	@docker build -t $(DOCKER_IMAGE) --force-rm .
+	@-test $(LOCAL) && $(MAKE) dclean
 
 rebuild:
-	@docker build -t $(LOCAL_TAG) --force-rm --no-cache .
+	@docker build -t $(DOCKER_IMAGE) --force-rm --no-cache .
+	@-test $(LOCAL) && $(MAKE) dclean
+
+tag:
+	@test $(ALT_TAG) && \
+		docker tag $(DOCKER_IMAGE) $(DOCKER_USER)/$(NAME):$(ALT_TAG)
+
+info:
+	@echo "NAME: 		$(NAME)"
+	@echo "BRANCH: 	$(BRANCH)"
+	@echo "TAG: 		$(TAG)"
+	@echo "DOCKER_USER: 	$(DOCKER_USER)"
+	@echo "DOCKER_IMAGE: 	$(DOCKER_IMAGE)"
 
 test:
-	@rspec ./tests/*.rb
-
-commit:
-	@git add -A .
-	@git commit
-
-push:
-	@git push origin master
-
-shell:
-	@docker exec -ti $(NAME) $(SHELL)
+	@tests/run
 
 run:
-	@docker run -it --rm --name $(NAME) -h $(NAME).local --env-file run.env $(VOLUME_ARGS) $(CAP_ARGS) $(LOCAL_TAG) $(SHELL)
+	@docker run -it --rm --name $(NAME) -h $(NAME).valuphone.local \
+		$(ENV_ARGS) $(VOLUME_ARGS) $(CAP_ARGS) --network local \
+		$(DOCKER_IMAGE) $(CSHELL)
+
+create-network:
+	@-docker network ls | awk '{print $2}' | grep -q local || docker network create local
 
 launch:
-	@docker run -d --name $(NAME) -h $(NAME).local $(ENV_ARGS) $(VOLUME_ARGS) $(PORT_ARGS) $(CAP_ARGS) $(LOCAL_TAG)
-
-launch-net:
-	@docker run -d --name $(NAME) -h $(NAME).local $(ENV_ARGS) $(VOLUME_ARGS) $(PORT_ARGS) $(CAP_ARGS) --network local --net-alias $(NAME).local $(LOCAL_TAG)
+	@docker run -d --name $(NAME) -h $(NAME).valuphone.local \
+		$(ENV_ARGS) $(VOLUME_ARGS) $(PORT_ARGS) $(CAP_ARGS) --network local \
+		$(DOCKER_IMAGE)
 
 launch-deps:
-	-cd ../docker-rabbitmq && make launch-as-dep
-	-cd ../docker-freeswitch && make launch-as-dep
+	@-cd ../docker-rabbitmq && make launch-as-dep
+	@-cd ../docker-freeswitch && make launch-as-dep
 
-rmf-deps:
-	-cd ../docker-rabbitmq && make rmf-as-dep
-	-cd ../docker-freeswitch && make rmf-as-dep
+rm-deps:
+	@-cd ../docker-rabbitmq && make rmf-as-dep
+	@-cd ../docker-freeswitch && make rmf-as-dep
 
-launch-dev:
-	@$(MAKE) launch-net
-
-rmf-dev:
-	@$(MAKE) rmf
+shell:
+	@docker exec -ti $(NAME) $(CSHELL)
 
 launch-as-dep:
-	@$(MAKE) launch-net
+	@$(MAKE) launch
 
 rmf-as-dep:
 	@$(MAKE) rmf
 
-create-network:
-	@docker network create -d bridge local
-
-proxies-up:
-	@cd ../docker-aptcacher-ng && make remote-persist
-	#@cd ../docker-squid && make remote-persist
-
-# dclean:
-# 	@-docker ps -aq | gxargs -I{} docker rm {} 2> /dev/null || true
-# 	@-docker images -f dangling=true -q | xargs docker rmi
-# 	@-docker volume ls -f dangling=true -q | xargs docker volume rm
-
 logs:
-	@docker logs $(NAME)
-
-logsf:
 	@docker logs -f $(NAME)
 
 start:
 	@docker start $(NAME)
 
 kill:
-	@docker kill $(NAME)
+	@-docker kill $(NAME)
 
 stop:
-	@docker stop $(NAME)
+	@-docker stop $(NAME)
 
 rm:
-	@docker rm $(NAME)
-
-rmf:
-	@docker rm -f $(NAME)
+	@-docker rm $(NAME)
 
 rmi:
-	@docker rmi $(LOCAL_TAG)
-	@docker rmi $(REMOTE_TAG)
+	@-docker rmi $(DOCKER_IMAGE)
+
+rmf:
+	@-docker rm --force $(NAME)
+
+hub-login:
+	@docker login -u $(DOCKER_USER) -p $(DOCKER_PASS)
+
+hub-push:
+	@docker push $(DOCKER_USER)/$(NAME)
+
+hub-build:
+	@curl -s -X POST -H "Content-Type: application/json" \
+		--data '{"docker_tag": "$(TAG)"}' \
+		https://registry.hub.docker.com/u/$(DOCKER_USER)/$(NAME)/trigger/$(BUILD_TOKEN)/
+
+kube-local:
+	@kubectl apply -f tests/manifests/local.yaml
+
+kube-local-rm:
+	@kubectl delete -f tests/manifests/local.yaml
 
 kube-deploy:
-	@kubectl create -f kubernetes/$(NAME)-deployment.yaml --record
+	@kubectl apply -f kubernetes
 
-kube-deploy-daemonset:
-	@kubectl create -f kubernetes/$(NAME)-daemonset.yaml
-
-kube-edit-daemonset:
-	@kubectl edit daemonset/$(NAME)
-
-kube-delete-daemonset:
-	@kubectl delete daemonset/$(NAME)
-
-kube-deploy-service:
-	@kubectl create -f kubernetes/$(NAME)-service.yaml
-
-kube-delete-service:
-	@kubectl delete svc $(NAME)
-
-kube-replace-service:
-	@kubectl replace -f kubernetes/$(NAME)-service.yaml
-
-kube-logsf:
-	@kubectl logs -f $(shell kubectl get po | grep $(NAME) | cut -d' ' -f1)
-
-kube-logsft:
-	@kubectl logs -f --tail=25 $(shell kubectl get po | grep $(NAME) | cut -d' ' -f1)
-
-kube-shell:
-	@kubectl exec -ti $(shell kubectl get po | grep $(NAME) | cut -d' ' -f1) -- bash
-
-default: build
+kube-rm:
+	@kubectl delete -f kubernetes

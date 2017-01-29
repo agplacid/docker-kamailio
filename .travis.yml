@@ -1,0 +1,43 @@
+addons:
+  apt:
+    packages:
+    - zsh
+services: docker
+env:
+  global:
+  - DOCKER_USER=callforamerica
+  # DOCKER_PASS
+  - secure: "JP38dGYvREiS/hc7okkPzkVLqvb0cq30bfnOJxcLiaDJJvrb/s13kMUdT7Uf7asXTGB1atQR0nZfSfJCZbVi+sUal4EskeH25pjiVz2TURqAr5qpMxPeraASJj8r32FdgiaLcCcRuaArMN85DsDBd38MS6MT+CkiWo5HSB/VAtYMoy2xs7mcIxRaOJhhWRciQvkXYfpUVXNi/M6s+qzuz8Mj0QEFDVblFxxRtYqnaEZb5k7+4ZloUzZiKjVCe8AzdSbdrVJlqZbBf4PBluYtVYqTlSK7DD+S5vxnedh76MgiV6Cw1F40FdLjedsB4c4siO3WxtyXVsCOsqux4DcoSw5NG0svICvg+6W49+3burWDVTwdEcas1Gf1RRwVBQFrqcaHPWQzG9pvKZgNUM9phfEggm9jZh+ghu8//OTLiSUxbn2l+W7AVHA1Bhp8ieJhXFfbXtq4p70VRq4P+Zt0JIPAS0o2ScS6xYAc6nY633PO6e8J3cr8XZRN2YV0dS51y2fYDbWNjisliK/q5fN5O+SShccFSIjTZC3qRQDF/Qi6dYJha783RFVkh1FWdy4WzsxFcoxOzlHqFX5b9s8t50oUNKFaT/EKlFpQvgOTTaFl7VfcT+Q+TVO9FNzYY7SvK+XlHgTxycVZK2nwk1YOLFzqdhPpiAcrT/boFx+ry8g="
+notifications:
+  email:
+    on_success: never
+    on_failure: always
+  slack:
+    rooms:
+    - secure: "Qpoi2ed8Xr2rszsnR7n13HXj2b1kJ8t/3DSYHe2ZCT390WzoM6gn278gybzW0zKbu2H9hUv5K1oor1h8F0VS/knyK9pNW1Tgx4JRown+ZFzPKyGakoLvKYhHzW2idWzTtZ5AAOet2hJxs056zda2OfUL50pq6cqFbW2c/NtxoDYkuIkB3+xWwuzrkMoAR+gUxvJmr+ADCr1Vo7Uw4KdBcP53dYeWbpO9VcsiWv/8eGWcBHtHJagDdotMtfwePKwKaKwcspbsL6URzrVhW52pEfW5KFqNg7hsiONeVabxuVEvpk+Yi1ngW2s+p4YzO3V4T99mCKqEZXO6cOemwNwF0V1s0U0zmV5uASO8/SwnX/+tgyB7DpYmzR79J+KlY7Qmav4vVa4Ghfri08nbgFSYOJzsPXhoDEg/E9gO9xYZ2A4v0dCH2IOihVGRrvj7zCdgPpSGvrexYlksvnHVBtvTUT1sg6ltAMFtGShnTF2kE2zIjP5HwprHBJ7aBrQLWYMt6jt4IIiD07DuNAzNA8e95rAmjBMmvmiJr2W2aIWrzSOnOlFrQZxhnWH3iY7lsnJEiHU1RXCMqePO+y301kjvSiv386n5FQwbamwnmPz83PGbv8dN3SEBWYW4ONPTjMv+ZWLjvULChpzFGSjOVSytNojSp9rVPLSzPguz3VogGco="
+    on_success: always
+    on_failure: always
+
+before_install:
+- source scripts/ci-env.sh
+- make info
+
+install:
+- make build
+
+before_script:
+- cd .. && git clone https://github.com/sip-li/docker-rabbitmq
+- cd .. && git clone https://github.com/sip-li/docker-freeswitch
+- make launch-deps
+- sleep 20
+- make launch
+- sleep 10
+
+script: make test
+
+after_success:
+- make tag ALT_TAG=${TRAVIS_COMMIT::6}
+- make tag ALT_TAG=travis-$TRAVIS_BUILD_NUMBER
+- make hub-login
+- make hub-push
+- make hub-build

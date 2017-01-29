@@ -1,11 +1,71 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kamailio
+  labels:
+    app: kamailio
+    test: 'true'
+    environment: testing
+data:
+  kamailio.log.level: info
+  kamailio.log.color: 'true'
+  kamailio.amqp.hosts: rabbitmq
+  kamailio.shm-memory: '128'
+  kamailio.pkg-memory: '8'
+  kamailio.child-proc: '8'
+  kamailio.enable-roles: websockets,message,presence_query,presence_sync,presence_notify_sync,registrar_sync
+  sync.freeswitch.source: kubernetes
+  sync.freeswitch.args: freeswitch
+  company.domain: valuphone.com
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kamailio
+  labels:
+    app: kamailio
+    test: 'true'
+    environment: testing
+spec:
+  clusterIP: None
+  selector:
+    app: kamailio
+    test: 'true'
+    environment: testing
+  ports:
+  - name: sip-tcp
+    port: 5060
+  - name: sip-udp
+    protocol: UDP
+    port: 5060
+  - name: sip-tls
+    port: 5061
+  - name: ws-tcp
+    port: 5064
+  - name: ws-udp
+    protocol: UDP
+    port: 5064
+  - name: wss-tcp
+    port: 5065
+  - name: wss-udp
+    protocol: UDP
+    port: 5065
+  - name: alg-tcp
+    port: 7000
+  - name: alg-udp
+    protocol: UDP
+    port: 7000
+  - name: alg-tls
+    port: 7001
+---
 apiVersion: extensions/v1beta1
 kind: Deployment
 metadata:
   name: kamailio
   labels:
     app: kamailio
-    project: valuphone
-    environment: production
+    test: 'true'
+    environment: testing
   annotations:
     pod.beta.kubernetes.io/init-containers: |-
       [
@@ -13,7 +73,7 @@ metadata:
               "name": "kubewait",
               "image": "callforamerica/kubewait",
               "imagePullPolicy": "IfNotPresent",
-              "args": ["rabbitmq-alpha", "rabbitmq-beta", "freeswitch"],
+              "args": ["rabbitmq", "freeswitch"],
               "env": [
                   {
                       "name": "NAMESPACE",
@@ -33,16 +93,14 @@ spec:
     metadata:
       labels:
         app: kamailio
-        project: valuphone
-        environment: production
+        test: 'true'
+        environment: testing
     spec:
       hostNetwork: true
-      nodeSelector:
-        kubernetes.io/hostname: saturn.valuphone.com
       containers:
       - name: kamailio
-        image: callforamerica/kamailio
-        imagePullPolicy: Always
+        image: callforamerica/kamailio:latest
+        imagePullPolicy: IfNotPresent
         securityContext:
           capabilities:
             add:
@@ -81,7 +139,7 @@ spec:
         - name: KAMAILIO_MY_WEBSOCKET_DOMAIN
           valueFrom:
             configMapKeyRef:
-              name: company
+              name: kamailio
               key: company.domain
         - name: KAMAILIO_ENABLE_ROLES
           valueFrom:
@@ -138,13 +196,6 @@ spec:
           containerPort: 7000
         - name: alg-tls
           containerPort: 7001
-        resources:
-          requests:
-            cpu: 2
-            memory: 1Gi
-          limits:
-            cpu: 2
-            memory: 1Gi
         readinessProbe:
           exec:
             command: ["kamctl", "monitor", "1", "|", "grep -q", "^Up"]
@@ -162,14 +213,8 @@ spec:
         volumeMounts:
         - name: volumes-ram
           mountPath: /volumes/kamailio/dbtext
-        - name: tls
-          mountPath: /volumes/kamailio/tls
-          readOnly: false
       volumes:
       - name: volumes-ram
         emptyDir:
           medium: Memory
-      - name: tls
-        secret:
-          secretName: wss-valuphone-com-tls
       restartPolicy: Always

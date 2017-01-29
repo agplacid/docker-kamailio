@@ -1,173 +1,105 @@
 #!/bin/bash -l
 
 set -e
+# set -x
 
-app=kamailio
-user=$app
+[[ -f /etc/entrypoint ]] && . /etc/entrypoint
+[[ -f /etc/default/$APP ]] && . /etc/default/$APP
 
-declare -A LOG_LEVEL_MAP=( 
-    [debug]=L_DBG 
-    [info]=L_INFO 
-    [notice]=L_NOTICE 
-    [warn]=L_WARN
-    [error]=L_ERR 
-    [critical]=L_CRIT
-    [critical2]=L_CRIT2
-    [bug]=L_BUG
-    [alert]=L_ALERT)
-
-if [ -f /etc/default/$app ]
-then
-    . /etc/default/$app
-fi
-
-: ${RABBITMQ_USER:=guest}
-: ${RABBITMQ_PASS:=guest}
-
-: ${RABBITMQ_HOST_A:=rabbitmq-alpha}
-: ${RABBITMQ_HOST_B:=rabbitmq-beta}
-: ${RABBITMQ_HOST_D:=rabbitmq-delta}
+: readonly ${PUBLIC_IPV4:=$(get-ipv4)}
+: readonly ${PUBLIC_FQDN:=$(env hostname -f)}
+: readonly ${DOMAIN_NAME:=$(dnsdomainname)}
 
 # accepts: debug info notice warn error critical alert
-: ${KAMAILIO_LOG_LEVEL:=info}
-: ${KAMAILIO_LOG_COLOR:=true}
+: readonly ${KAMAILIO_LOG_LEVEL:=info}
+: readonly ${KAMAILIO_LOG_COLOR:=true}
 
-: ${KAMAILIO_ENABLE_SECONDARY_AMQP:=false}
-: ${KAMAILIO_ENABLE_TERTIARY_AMQP:=false}
+: readonly ${KAMAILIO_MY_HOSTNAME:=$PUBLIC_FQDN}
+: readonly ${KAMAILIO_MY_IP_ADDRESS:=$PUBLIC_IPV4}
+: readonly ${KAMAILIO_MY_WEBSOCKET_DOMAIN:=$DOMAIN_NAME}
 
-: ${KAMAILIO_MY_HOSTNAME:=$(hostname -f)}
-: ${KAMAILIO_MY_IP_ADDRESS:=$(hostname -i | head -1)}
-: ${KAMAILIO_MY_AMQP_URL:=kazoo://$RABBITMQ_USER:$RABBITMQ_PASS@$RABBITMQ_HOST_A:5672}
-: ${KAMAILIO_MY_AMQP_URL_SECONDARY:=kazoo://$RABBITMQ_USER:$RABBITMQ_PASS@$RABBITMQ_HOST_B:5672}
-: ${KAMAILIO_MY_AMQP_URL_TERTIARY:=kazoo://$RABBITMQ_USER:$RABBITMQ_PASS@$RABBITMQ_HOST_D:5672}
+: readonly ${KAMAILIO_AMQP_HOSTS:=rabbitmq}
 
-: ${KAMAILIO_MY_WEBSOCKET_DOMAIN:=valuphone.com}
+: readonly ${RABBITMQ_USER:=guest}
+: readonly ${RABBITMQ_PASS:=guest}
 
-: ${KAMAILIO_SHM_MEMORY:=256}
-: ${KAMAILIO_PKG_MEMORY:=12}
-: ${KAMAILIO_CHILD_PROC:=$(expr $(nproc) / 2 + 2)}
+: declare -ir ${KAMAILIO_SHM_MEMORY:=256}
+: declare -ir ${KAMAILIO_PKG_MEMORY:=12}
+: declare -ir ${KAMAILIO_CHILD_PROC:=$(kamailio::get-child-procs)}
+: declare -ir ${KAMAILIO_MTU:=$(net::get-mtu)}
 
-: ${KAMAILIO_ENABLE_ROLES:=websockets,message}
+: readonly ${KAMAILIO_ENABLE_ROLES:=websockets,message}
 
-: ${KAMAILIO_FREESWITCH_SYNC_SOURCE:=dns}
-: ${KAMAILIO_FREESWITCH_SYNC_ARGS:=freeswitch}
+: readonly ${SYNC_FREESWITCH_SOURCE:=dns}
+: readonly ${SYNC_FREESWITCH_ARGS:=freeswitch}
 
-function log 
-{
-    local msg="$1"
-    echo -e "\E[36m[*]\E[0m ${msg}" 
-}
-
-function errlog
-{
-    local msg="$1"
-    echo -e "\E[31m[x]\E[0m ${msg}" >&2
-}
+readonly LOG_LEVEL=$(kamailio::get-loglevel $KAMAILIO_LOG_LEVEL)
+readonly AMQP_HOSTS=($(kazoo::build-amqp-uris "$KAMAILIO_AMQP_HOSTS" 'kazoo'))
 
 
-log "Converting log level from $KAMAILIO_LOG_LEVEL ..."
-KAMAILIO_LOG_LEVEL=${LOG_LEVEL_MAP[${KAMAILIO_LOG_LEVEL,,}]}
+pushd /etc/kamailio
+    log::m-info "Setting log level to: $LOG_LEVEL ..."
+    sed -i -r "/^debug /s/\w*$/$LOG_LEVEL/" local.cfg
 
-log "Setting log level to: $KAMAILIO_LOG_LEVEL ..."
-sed -i -r "/^debug /s/\w*$/$KAMAILIO_LOG_LEVEL/" /etc/kamailio/local.cfg
-
-
-mtu=$(ip -o link show $(routel 2> /dev/null | grep default | awk '{print $3}') | sed '/mtu/s/.*mtu \([[:digit:]]\+\).*/\1/')
-if [[ $mtu -gt 1300 ]]
-then
-    log "Setting mtu to $mtu"
-    sed "/udp4_raw_mtu/s/\b[[:digit:]]\+$/$mtu/" /etc/kamailio/local.cfg
-fi
-
-log "Rewriting local.cfg ..."
-sed -i "/MY_HOSTNAME/s/\(MY_HOSTNAME\!\).*\(\!\)/\1$KAMAILIO_MY_HOSTNAME\2/" /etc/kamailio/local.cfg
-sed -i "/MY_IP_ADDRESS/s/\(MY_IP_ADDRESS\!\).*\(\!\)/\1$KAMAILIO_MY_IP_ADDRESS\2/" /etc/kamailio/local.cfg 
-sed -i "\|MY_AMQP_URL|s|\(MY_AMQP_URL\!\).*\(\!\)|\1$KAMAILIO_MY_AMQP_URL\2|" /etc/kamailio/local.cfg 
-sed -i "/MY_WEBSOCKET_DOMAIN/s/\(MY_WEBSOCKET_DOMAIN\!\).*\(\!\)/\1$KAMAILIO_MY_WEBSOCKET_DOMAIN\2/" /etc/kamailio/local.cfg 
-
-
-if [[ $KAMAILIO_ENABLE_SECONDARY_AMQP = true ]]
-then
-    log "Enabling secondary amqp server: $KAMAILIO_MY_AMQP_URL_SECONDARY ..."
-    if grep -q '^# # #\!.*MY_SECONDARY_AMQP_URL' /etc/kamailio/local.cfg
-    then
-        sed -i '/MY_SECONDARY_AMQP_URL/s/^# # //' /etc/kamailio/local.cfg
-    fi 
-    sed -i "\|\!MY_SECONDARY_AMQP_URL|s|\(MY_SECONDARY_AMQP_URL\!\).*\(\!\)|\1$KAMAILIO_MY_AMQP_URL_SECONDARY\2|" /etc/kamailio/local.cfg 
-else
-    if grep -q '^#\!.*MY_SECONDARY_AMQP_URL' /etc/kamailio/local.cfg
-    then
-        sed -i '/MY_SECONDARY_AMQP_URL/s/^/# # /' /etc/kamailio/local.cfg
+    if (( $KAMAILIO_MTU != 1500 )); then
+        log::m-info "Changing MTU to $MTU"
+        sed "/udp4_raw_mtu/s/\b[[:digit:]]\+$/$MTU/" local.cfg
     fi
-fi
 
-if [[ $KAMAILIO_ENABLE_TERTIARY_AMQP = true ]]
-then
-    log "Enabling tertiary amqp server: $KAMAILIO_MY_AMQP_URL_TERTIARY ..."
-    if grep -q '^# # #\!.*MY_TERTIARY_AMQP_URL' /etc/kamailio/local.cfg
-    then
-        sed -i '/MY_TERTIARY_AMQP_URL/s/^# # //' /etc/kamailio/local.cfg
-    fi 
-    sed -i "\|\!MY_TERTIARY_AMQP_URL|s|\(MY_TERTIARY_AMQP_URL\!\).*\(\!\)|\1$KAMAILIO_MY_AMQP_URL_TERTIARY\2|" /etc/kamailio/local.cfg 
-else
-    if grep -q '^#\!.*MY_TERTIARY_AMQP_URL' /etc/kamailio/local.cfg
-    then
-        sed -i '/MY_TERTIARY_AMQP_URL/s/^/# # /' /etc/kamailio/local.cfg
+    log::m-info "Rewriting local.cfg ..."
+    sed -i "/MY_HOSTNAME/s/\(MY_HOSTNAME\!\).*\(\!\)/\1$KAMAILIO_MY_HOSTNAME\2/" local.cfg
+    sed -i "/MY_IP_ADDRESS/s/\(MY_IP_ADDRESS\!\).*\(\!\)/\1$KAMAILIO_MY_IP_ADDRESS\2/" $_
+    sed -i "\|MY_AMQP_URL|s|\(MY_AMQP_URL\!\).*\(\!\)|\1${AMQP_HOSTS[0]}\2|" $_
+    sed -i "/MY_WEBSOCKET_DOMAIN/s/\(MY_WEBSOCKET_DOMAIN\!\).*\(\!\)/\1$KAMAILIO_MY_WEBSOCKET_DOMAIN\2/" $_
+
+    if (( ${#AMQP_HOSTS[@]} > 1 )); then
+        log::m-info "Enabling secondary amqp server:  ${AMQP_HOSTS[1]} ..."
+        if grep -q '^# # #\!.*MY_SECONDARY_AMQP_URL' local.cfg; then
+            sed -i '/MY_SECONDARY_AMQP_URL/s/^# # //' local.cfg
+        fi
+        sed -i "\|\!MY_SECONDARY_AMQP_URL|s|\(MY_SECONDARY_AMQP_URL\!\).*\(\!\)|\1${AMQP_HOSTS[1]}\2|" local.cfg
+    else
+        if grep -q '^#\!.*MY_SECONDARY_AMQP_URL' local.cfg; then
+            sed -i '/MY_SECONDARY_AMQP_URL/s/^/# # /' local.cfg
+        fi
     fi
-fi
+
+    if (( ${#AMQP_HOSTS[@]} > 2 )); then
+        log::m-info "Enabling tertiary amqp server: ${AMQP_HOSTS[2]} ..."
+        if grep -q '^# # #\!.*MY_TERTIARY_AMQP_URL' local.cfg; then
+            sed -i '/MY_TERTIARY_AMQP_URL/s/^# # //' local.cfg
+        fi
+        sed -i "\|\!MY_TERTIARY_AMQP_URL|s|\(MY_TERTIARY_AMQP_URL\!\).*\(\!\)|\1${AMQP_HOSTS[2]}\2|" local.cfg
+    else
+        if grep -q '^#\!.*MY_TERTIARY_AMQP_URL' local.cfg; then
+            sed -i '/MY_TERTIARY_AMQP_URL/s/^/# # /' local.cfg
+        fi
+    fi
+
+    log::m-info "Enabling roles: ${KAMAILIO_ENABLE_ROLES} in local.cfg ..."
+    if [[ -n $KAMAILIO_ENABLE_ROLES ]]; then
+        for role in ${KAMAILIO_ENABLE_ROLES//,/ }; do
+            sed -i "/${role^^}_ROLE/s/# # //" local.cfg
+        done
+    fi
+    cat local.cfg
+    popd
 
 
-log "Enabling roles: ${KAMAILIO_ENABLE_ROLES} in local.cfg ..."
-if [[ -n $KAMAILIO_ENABLE_ROLES ]]
-then
-    for role in $(echo "${KAMAILIO_ENABLE_ROLES//,/ }")
-    do 
-        sed -i "/${role^^}_ROLE/s/# # //" /etc/kamailio/local.cfg
-    done
-fi
-
-cat /etc/kamailio/local.cfg
+log::m-info "Copying dbtext files to /volumes/$APP/dbtext/ ..."
+mkdir -p /volumes/$APP/dbtext
+cp -R /etc/$APP/dbtext/* $_/
 
 
-log "Copying dbtext files to /volumes/ram/dbtext ..."
-mkdir -p /volumes/ram/dbtext
-cp -R /etc/kamailio/dbtext/* /volumes/ram/dbtext
+log::m-info "Syncing freeswitch servers ..."
+sync-freeswitch $SYNC_FREESWITCH_SOURCE "$SYNC_FREESWITCH_ARGS"
 
 
-log "Syncing freeswitch servers ..."
-sync-freeswitch-servers $KAMAILIO_FREESWITCH_SYNC_SOURCE $KAMAILIO_FREESWITCH_SYNC_ARGS
+log::m-info "Setting ulimits ..."
+set-limits 'kamailio'
 
-
-log "Applying performance enhancements ..."
-if capsh --print | grep -q cap_sys_resource
-then
-    log "Setting ulimits ..."
-    ulimit -c unlimited # max core files size
-    ulimit -d unlimited # max proc data segment size
-    ulimit -f unlimited # max file size
-    ulimit -l unlimited # max locked memory size
-    ulimit -n 999999    # max file descriptors
-    ulimit -m unlimited # max memory size
-    ulimit -s 240       # max stack size soft
-    ulimit -H -s 240    # max stack size hard
-    ulimit -t unlimited # max cpu time
-    ulimit -u unlimited # max procs
-    ulimit -v unlimited # max virtual memory size
-    ulimit -e 31        # max scheduling priority
-    ulimit -x unlimited # max file locks
-    ulimit -i unlimited # max pending signals
-    ulimit -q unlimited # max msg queue size
-    ulimit -r 70        # max realtime priority
-    ulimit -a
-else
-    errlog "Capability to set resource limits is restricted in this container. For best performance please run container with --cap-add SYS_RESOURCE"
-fi
-
-if capsh --print | grep -q cap_sys_nice
-then
-    log "Setting nice level to -11 ..."
-    renice -11 $$
-    log "Enabling real-time priority settings ..."
+if linux::cap::is-enabled; then
+    log::m-info "Enabling real-time priority settings ..."
     sed -i '/Global Parameters/a \
 real_time = 7 \
 rt_prio = 70 \
@@ -176,29 +108,35 @@ rt_timer1_prio = 70 \
 rt_timer1_policy = 2 \
 rt_timer2_prio = 70 \
 rt_timer2_policy = 2' /etc/kamailio/default.cfg
-else
-    errlog "Capability to set nice level is restricted in this container. For best performance please run container with --cap-add SYS_NICE"
 fi
 
-if ! capsh --print | grep -q cap_net_raw
-then
-    errlog "Capability to use raw sockets restricted in container. For best performance please run container with --cap-add NET_RAW"
-fi
-
-if ! capsh --print | grep -q cap_ipc_lock
-then
-    errlog "Capability to lock ipc restricted in container. For best performance please run container with --cap-add IPC_LOCK"
-fi
+for cap in net_raw ipc_lock; do
+    if linux::cap::is-disabled $cap; then
+        linux::cap::show-warning $cap
+    fi
+done
 
 
-log "Ensuring Permissions ..."
-chown -R $user:$user /etc/kamailio /volumes/ram /volumes/tls
+log::m-info "Ensuring Permissions ..."
+chown -R $USER:$USER /etc/kamailio /volumes/kamailio
 
 
-log "Building arguments ..."
-[[ $KAMAILIO_LOG_COLOR = true ]] && CLOG_ARGS='-e'
+log::m-info "Building arguments ..."
+CMD_ARGS=("-DD")
+[[ ! -z $KAMAILIO_SHM_MEMORY ]] \
+    && CMD_ARGS+=("-m $KAMAILIO_SHM_MEMORY")
+
+[[ ! -z $KAMAILIO_PKG_MEMORY ]] \
+    && CMD_ARGS+=("-M $KAMAILIO_PKG_MEMORY")
+
+[[ ! -z $KAMAILIO_CHILD_PROC ]] \
+    && CMD_ARGS+=("-n $KAMAILIO_CHILD_PROC")
+
+[[ $KAMAILIO_LOG_COLOR = true ]] \
+    && CMD_ARGS+=("-e")
+set -- ${CMD_ARGS[@]}
 
 
-log "Starting $app ..."
+log::m-info "Starting $APP ..."
 cd ~
-    exec kamailio -DD -m $KAMAILIO_SHM_MEMORY -M $KAMAILIO_PKG_MEMORY -n $KAMAILIO_CHILD_PROC $CLOG_ARGS 2>&1
+    exec gosu $USER kamailio "$@" 2>&1

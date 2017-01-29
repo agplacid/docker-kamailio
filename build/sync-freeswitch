@@ -1,64 +1,35 @@
-#!/bin/bash
+#!/bin/bash -l
 
 set -e
 
-: ${DISPATCHER_PATH:=/volumes/ram/dbtext/dispatcher}
+: ${DISPATCHER_PATH:=/volumes/kamailio/dbtext/dispatcher}
 : ${KUBE_TOKEN_PATH:=/var/run/secrets/kubernetes.io/serviceaccount/token}
 
 user=kamailio
 
-
-function log 
-{
-    local msg="$1" >&2
-    echo -e "\E[36m[*]\E[0m ${msg}" 
-}
-
-function errlog
-{
-    local msg="$1"
-    echo -e "\E[31m[x]\E[0m ${msg}" >&2
-}
-
-function header
-{
-    local msg="$1"
-    echo -e "\E[35m[#]\E[0m ${msg}" >&2
-}
-
-function progress_tick
-{
-    echo -e -n '\E[33m . \E[0m' >&2
-}
-
-function get_freeswitch_servers_dns
-{
+function get_freeswitch_servers_dns {
     local dns_name=${1:-freeswitch}
     local query=$(dig +short +search $dns_name)
     [[ -z $query || $query =~ Warning ]] && return 1
     echo "$query"
 }
 
-function get_freeswitch_servers_kubernetes
-{
+function get_freeswitch_servers_kubernetes {
     local service_name=${1:-freeswitch}
     local kube_host=https://kubernetes
-    
-    if ! which jq > /dev/null 
-        then
-        errlog "jq not installed"
+
+    if ! which jq > /dev/null; then
+        log::m-error "jq not installed"
         return 1
-    elif ! which jq > /dev/null
-    then
-        errlog "curl not installed"
+    elif ! which jq > /dev/null; then
+        log::m-error "curl not installed"
         return 1
     fi
 
-    if [[ -f $KUBE_TOKEN_PATH ]]
-    then
+    if [[ -f $KUBE_TOKEN_PATH ]]; then
         local kube_token=$(cat $KUBE_TOKEN_PATH)
     else
-        errlog "path for kube token: $KUBE_TOKEN_PATH is invalid"
+        log::m-error "path for kube token: $KUBE_TOKEN_PATH is invalid"
         return 1
     fi
 
@@ -67,54 +38,45 @@ function get_freeswitch_servers_kubernetes
     echo "$query"
 }
 
-function get_freeswitch_servers_file
-{
+function get_freeswitch_servers_file {
     local file_path=$1
-    if [[ ! -f $file_path ]]
-    then
-        errlog "Bad file path: $file_path"
+    if [[ ! -f $file_path ]]; then
+        log::m-error "Bad file path: $file_path"
         return 1
     fi
 
     local contents="$(cat $file_path)"
-    if [[ ! -z $contents ]]
-    then
+    if [[ ! -z $contents ]]; then
         echo "$contents"
     else
-        errlog "File: $file_path is empty"
+        log::m-error "File: $file_path is empty"
         return 1
     fi
 }
 
-function get_freeswitch_servers_env
-{
-    if [[ ! -z $FREESWITCH_NODES ]]
-    then
+function get_freeswitch_servers_env {
+    if [[ ! -z $FREESWITCH_NODES ]]; then
         echo "${FREESWITCH_NODES//,/ }"
     else
-        errlog "No servers in: FREESWITCH_NODES"
+        log::m-error "No servers in: FREESWITCH_NODES"
         return 1
     fi
 }
 
-function get_freeswitch_servers
-{
+function get_freeswitch_servers {
     local src=$1
     local args=$2
     local servers=
 
-    until [[ ! -z $servers ]]
-    do
+    until [[ ! -z $servers ]]; do
         case "$src" in
             localhost)
                 servers='127.0.0.1'
                 ;;
             dns)
-                progress_tick
                 servers=$(get_freeswitch_servers_dns $args)
                 ;;
             kubernetes)
-                progress_tick
                 servers=$(get_freeswitch_servers_kubernetes $args)
                 ;;
             file)
@@ -127,7 +89,7 @@ function get_freeswitch_servers
                 exit 0
                 ;;
             *)
-                errlog "Incorrect freeswitch node source: $src"
+                log::m-error "Incorrect freeswitch node source: $src"
                 exit 1
                 ;;
         esac
@@ -137,96 +99,80 @@ function get_freeswitch_servers
     clean_input "$servers"
 }
 
-function clean_input
-{
+function clean_input {
     inp=$1
     echo "$inp" | sed 's/[[:space:]]\+/ /g;s/^[[:space:]]*\|[[:space:]]$//g;/^\s*$/d' | sort | uniq | awk 1 ORS=' ' | sed 's/[[:space:]]$//g'
 }
 
-function clear_dispatcher
-{
+function clear_dispatcher {
     sed -i '/^id/!d' $DISPATCHER_PATH
 }
 
-function add_server_to_dispatcher
-{
+function add_server_to_dispatcher {
     local server=$1
     echo "1:1:sip\:$server\:11000:0:1: : " >> $DISPATCHER_PATH
 }
 
-function add_fs_servers
-{
+function add_fs_servers {
     local servers=$1
-    
-    log "Adding freeswitch servers: $servers to dispatcher ..."
+
+    log::m-info "Adding freeswitch servers: $servers to dispatcher ..."
     clear_dispatcher
 
     for server in $(echo $servers); do
-        if test_server_name $server
-        then
+        if test_server_name $server; then
             add_server_to_dispatcher $server
         fi
     done
     show_dispatcher
 }
 
-function show_dispatcher
-{
+function show_dispatcher {
     cat $DISPATCHER_PATH | tail -n +2 >&2
 }
 
-function usage
-{
-    header "Usage: ${0##*/} {localhost|dns <dns-name>|kubernetes <service-name>|file <filename>|env|none|clear-dispatcher}"
+function usage {
+    echo "Usage: ${0##*/} {localhost|dns <dns-name>|kubernetes <service-name>|file <filename>|env|none|clear-dispatcher}"
     exit 1
 }
 
-function set_permissions
-{
-    log "Ensuring Permissions ..."
+function set_permissions {
+    log::m-info "Ensuring Permissions ..."
     chown -R $user:$user /etc/kamailio
 }
 
-function reload_dispatcher
-{
-    log "Reloading dispatcher ..."
-    if kamctl uptime 2> /dev/null | grep --silent ^Up
-    then
+function reload_dispatcher {
+    log::m-info "Reloading dispatcher ..."
+    if kamctl uptime 2> /dev/null | grep --silent ^Up; then
         kamctl dispatcher reload
     fi
 }
 
-function test_server_name
-{
+function test_server_name {
     local query=$1
 
-    if [[ $query =~ ^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$ ]]
-    then
+    if [[ $query =~ ^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$ ]]; then
         return 0
     else
         return 1
     fi
 }
 
-function main
-{
-    if [[ $1 = clear-dispatcher ]]
-    then
+function main {
+    if [[ $1 = clear-dispatcher ]]; then
         clear_dispatcher
         exit 0
     fi
 
     local servers=$(get_freeswitch_servers $@)
-    if [[ ! -z $servers ]]
-    then
+    if [[ ! -z $servers ]]; then
         add_fs_servers "$servers"
         set_permissions
         reload_dispatcher
     fi
 }
 
-if [[ $1 ]]
-then
+if [[ $1 ]]; then
     main "$@"
 else
     usage

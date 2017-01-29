@@ -1,18 +1,18 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: kamailio-config
+  name: kamailio
   labels:
     app: kamailio
     project: valuphone
     environment: production
 data:
-  kamailio.log-level: info
-  kamailio.log-color: 'true'
-  kamailio.enable-secondary-amqp: 'true'
+  kamailio.log.level: info
+  kamailio.log.color: 'true'
+  kamailio.amqp.hosts: rabbitmq-alpha,rabbitmq-beta
   kamailio.shm-memory: '128'
   kamailio.pkg-memory: '8'
   kamailio.child-proc: '8'
-  kamailio.enable-roles: websockets,message,tls,presence_query,presence_sync,presence_notify_sync,registrar_sync,acl,rate_limiter
-  kamailio.freeswitch.sync.source: kubernetes
-  kamailio.freeswitch.sync.args: freeswitch
+  kamailio.enable-roles: websockets,message,tls,presence_query,presence_sync,presence_notify_sync,registrar_sync
+  sync.freeswitch.source: kubernetes
+  sync.freeswitch.args: freeswitch

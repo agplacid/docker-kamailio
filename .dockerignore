@@ -1,5 +1,8 @@
-Makefile
-README.md
 kubernetes/
-export
-tls/*
+tests/
+.*/
+.*
+*.md
+*.rst
+*.env
+Makefile
