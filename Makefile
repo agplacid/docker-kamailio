@@ -18,6 +18,7 @@ CSHELL = bash -l
 ENV_ARGS = --env-file default.env
 PORT_ARGS = -p "5060-5061:5060-5061" -p "5060:5060/udp" -p "5064-5065:5064-5065" -p "5064-5065:5064-5065/udp" -p "7000-7001:7000-7001" -p "7000:7000/udp"
 CAP_ARGS = --cap-add IPC_LOCK --cap-add SYS_NICE --cap-add SYS_RESOURCE --cap-add NET_RAW
+NETWORK_ARGS = --network local
 
 -include ../Makefile.inc
 
@@ -47,17 +48,17 @@ info:
 test:
 	@tests/run
 
+create-network:
+	@-docker network create local
+
 run:
 	@docker run -it --rm --name $(NAME) -h $(NAME).valuphone.local \
-		$(ENV_ARGS) $(VOLUME_ARGS) $(CAP_ARGS) --network local \
+		$(ENV_ARGS) $(VOLUME_ARGS) $(CAP_ARGS) $(NETWORK_ARGS) \
 		$(DOCKER_IMAGE) $(CSHELL)
-
-create-network:
-	@-docker network ls | awk '{print $2}' | grep -q local || docker network create local
 
 launch:
 	@docker run -d --name $(NAME) -h $(NAME).valuphone.local \
-		$(ENV_ARGS) $(VOLUME_ARGS) $(PORT_ARGS) $(CAP_ARGS) --network local \
+		$(ENV_ARGS) $(VOLUME_ARGS) $(PORT_ARGS) $(CAP_ARGS) $(NETWORK_ARGS) \
 		$(DOCKER_IMAGE)
 
 launch-deps:

@@ -22,12 +22,12 @@ before_install:
 - source scripts/ci-env.sh
 - make info
 
-install:
-- make build
+install: make build
 
 before_script:
 - cd .. && git clone https://github.com/sip-li/docker-rabbitmq
 - cd .. && git clone https://github.com/sip-li/docker-freeswitch
+- make create-network
 - make launch-deps
 - sleep 20
 - make launch
