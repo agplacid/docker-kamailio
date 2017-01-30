@@ -25,8 +25,8 @@ before_install:
 install: make build
 
 before_script:
-- cd .. && git clone https://github.com/sip-li/docker-rabbitmq
-- cd .. && git clone https://github.com/sip-li/docker-freeswitch
+- cd .. && git clone https://github.com/sip-li/docker-rabbitmq && cd -
+- cd .. && git clone https://github.com/sip-li/docker-freeswitch && cd -
 - make create-network
 - make launch-deps
 - sleep 20
