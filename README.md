@@ -1,4 +1,4 @@
-# kamailio (stable) w/ Kubernetes fixes & manifests
+# Kamailio w/ Kubernetes fixes & manifests
 
 [![Build Status](https://travis-ci.org/sip-li/docker-kamailio.svg?branch=master)](https://travis-ci.org/sip-li/docker-kamailio) [![Docker Pulls](https://img.shields.io/docker/pulls/callforamerica/kamailio.svg)](https://store.docker.com/community/images/callforamerica/kamailio)
 
