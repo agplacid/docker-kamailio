@@ -18,11 +18,11 @@ notifications:
 before_install:
 - pip install --upgrade docker-compose
 - source scripts/ci/environment.sh
+- clone-deps rabbitmq freeswitch
 
-install: docker-compose build kamailio
+install: docker-compose build
 
 before_script:
-- clone-deps rabbitmq freeswitch
 - docker-compose up -d
 - sleep 15
 
