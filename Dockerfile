@@ -41,5 +41,9 @@ VOLUME  ["/volumes/kamailio/dbtext", "/volumes/kamailio/tls"]
 
 WORKDIR $HOME
 
+SHELL       ["/bin/bash"]
+HEALTHCHECK --interval=15s --timeout=5s \
+    CMD  kamctl monitor 1 | grep -q ^Up || exit 1
+
 ENTRYPOINT  ["/dumb-init", "--"]
 CMD         ["/entrypoint"]
