@@ -19,8 +19,9 @@ before_install:
 - pip install --upgrade docker-compose
 - source scripts/ci/environment.sh
 - clone-deps rabbitmq freeswitch
+- pull-deps rabbitmq freeswitch
 
-install: docker-compose build
+install: docker-compose build kamailio
 
 before_script:
 - docker-compose up -d
