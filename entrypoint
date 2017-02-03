@@ -119,6 +119,7 @@ done
 
 log::m-info "Ensuring Permissions ..."
 chown -R $USER:$USER /etc/kamailio /volumes/kamailio
+fixattrs
 
 
 log::m-info "Building arguments ..."
@@ -139,4 +140,4 @@ set -- ${CMD_ARGS[@]}
 
 log::m-info "Starting $APP ..."
 cd ~
-    exec gosu $USER kamailio "$@" 2>&1
+    exec kamailio "$@" 2>&1
