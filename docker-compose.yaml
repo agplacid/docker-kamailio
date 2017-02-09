@@ -17,8 +17,6 @@ services:
       local:
         aliases:
         - kazoo.local
-    volumes:
-    - data-kamailio:/volumes/kamailio/dbtext
     cap_add:
     - IPC_LOCK
     - NET_ADMIN
@@ -52,8 +50,3 @@ services:
     image: "callforamerica/freeswitch:latest"
 networks:
   local:
-volumes:
-  data-kamailio:
-  data-rabbitmq-alpha:
-  data-rabbitmq-beta:
-  data-freeswitch:
