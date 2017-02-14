@@ -1,0 +1,298 @@
+#
+# RABBITMQ
+#
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: rabbitmq-creds
+  labels:
+    app: rabbitmq
+    test: 'true'
+    environment: testing
+type: Opaque
+data:
+  rabbitmq.pass: RVZCNklCQVhWMTlUWEtlQWZ4dWRUQkk0RVk3dzljaWk=
+  rabbitmq.user: Y29sbGFib3JhdGU=
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: erlang-cookie
+  labels:
+    app: rabbitmq
+    test: 'true'
+    environment: testing
+type: Opaque
+data:
+  erlang.cookie: WlgyZVA4Umo4cnVmUjVJbjNnWGV1akhYNllseEREbnRyd3ZROE5kcGd3OXFOQjZ5UFhPUWhxNFF4bEc0WnZaQQ==
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rabbitmq
+  labels:
+    app: rabbitmq
+    test: 'true'
+    environment: testing
+data:
+  kube.hostname.fix: 'true'
+  kube.use-long-hostname: 'true'
+  rabbitmq.log.level: info
+  rabbitmq.use-longname: 'true'
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: rabbitmq
+  labels:
+    app: rabbitmq
+    test: 'true'
+    environment: testing
+spec:
+  selector:
+    app: rabbitmq
+  ports:
+    - name: amqp
+      port: 5672
+    - name: admin
+      port: 15672
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: rabbitmq
+  labels:
+    app: rabbitmq
+    test: 'true'
+    environment: testing
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: rabbitmq
+        test: 'true'
+        environment: testing
+    spec:
+      containers:
+      - name: rabbitmq
+        image: callforamerica/rabbitmq:latest
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: KUBE_HOSTNAME_FIX
+          valueFrom:
+            configMapKeyRef:
+              name: rabbitmq
+              key: kube.hostname.fix
+        - name: RABBITMQ_USE_LONGNAME
+          valueFrom:
+            configMapKeyRef:
+              name: rabbitmq
+              key: rabbitmq.use-longname
+        - name: USE_LONG_HOSTNAME
+          valueFrom:
+            configMapKeyRef:
+              name: rabbitmq
+              key: kube.use-long-hostname
+        - name: RABBITMQ_LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: rabbitmq
+              key: rabbitmq.log.level
+        - name: RABBITMQ_DEFAULT_USER
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq-creds
+              key: rabbitmq.user
+        - name: RABBITMQ_DEFAULT_PASS
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq-creds
+              key: rabbitmq.pass
+        - name: ERLANG_COOKIE
+          valueFrom:
+            secretKeyRef:
+              name: erlang-cookie
+              key: erlang.cookie
+        ports:
+        - name: amqp
+          containerPort: 5672
+        - name: admin
+          containerPort: 15672
+        volumeMounts:
+        - name: mnesia-ramfs
+          mountPath: /var/lib/rabbitmq/mnesia
+        readinessProbe:
+          tcpSocket:
+            port: 5672
+          initialDelaySeconds: 10
+          timeoutSeconds: 10
+        livenessProbe:
+          exec:
+            command: ["/bin/bash", "-lc", "rabbitmqctl node_health_check | grep -q '^Health check passed'"]
+          initialDelaySeconds: 10
+          timeoutSeconds: 5
+      volumes:
+      - name: mnesia-ramfs
+        emptyDir:
+          medium: Memory
+      restartPolicy: Always
+
+#
+# FREESWITCH
+#
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: erlang-cookie
+  labels:
+    app: freeswitch
+    test: 'true'
+    environment: testing
+type: Opaque
+data:
+  erlang.cookie: WlgyZVA4Umo4cnVmUjVJbjNnWGV1akhYNllseEREbnRyd3ZROE5kcGd3OXFOQjZ5UFhPUWhxNFF4bEc0WnZaQQ==
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: freeswitch
+  labels:
+    app: freeswitch
+    test: 'true'
+    environment: testing
+data:
+  kube.search-domains.add: 'true'
+  freeswitch.log.level: info
+  freeswitch.log.color: 'true'
+  freeswitch.rtp.start-port: '16384'
+  freeswitch.rtp.end-port: '32768'
+  freeswitch.disable-nat-detection: 'false'
+  freeswitch.skip-sounds: 'false'
+  freeswitch.tls.enable: 'false'
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: freeswitch
+  labels:
+    app: freeswitch
+    test: 'true'
+    environment: testing
+spec:
+  clusterIP: None
+  selector:
+    app: freeswitch
+  ports:
+  - name: event-socket
+    port: 8021
+  - name: mod-kazoo
+    port: 8031
+  - name: sip
+    port: 11000
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: freeswitch
+  labels:
+    app: freeswitch
+    test: 'true'
+    environment: testing
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: freeswitch
+        test: 'true'
+        environment: testing
+    spec:
+      hostNetwork: true
+      containers:
+      - name: freeswitch
+        image: callforamerica/freeswitch:latest
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          capabilities:
+            add:
+            - IPC_LOCK
+            - NET_ADMIN
+            - NET_RAW
+            - NET_BROADCAST
+            - SYS_NICE
+            - SYS_RESOURCE
+        env:
+        - name: KUBE_SEARCH_DOMAINS_ADD
+          valueFrom:
+            configMapKeyRef:
+              name: freeswitch
+              key: kube.search-domains.add
+        - name: ERLANG_COOKIE
+          valueFrom:
+            secretKeyRef:
+              name: erlang-cookie
+              key: erlang.cookie
+        - name: FREESWITCH_LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: freeswitch
+              key: freeswitch.log.level
+        - name: FREESWITCH_LOG_COLOR
+          valueFrom:
+            configMapKeyRef:
+              name: freeswitch
+              key: freeswitch.log.color
+        - name: FREESWITCH_RTP_START_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: freeswitch
+              key: freeswitch.rtp.start-port
+        - name: FREESWITCH_RTP_END_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: freeswitch
+              key: freeswitch.rtp.end-port
+        - name: FREESWITCH_DISABLE_NAT_DETECTION
+          valueFrom:
+            configMapKeyRef:
+              name: freeswitch
+              key: freeswitch.disable-nat-detection
+        - name: FREESWITCH_TLS_ENABLE
+          valueFrom:
+            configMapKeyRef:
+              name: freeswitch
+              key: freeswitch.tls.enable
+        ports:
+        - name: event-socket
+          containerPort:  8021
+        - name: mod-kazoo
+          containerPort:  8031
+        - name: sip
+          protocol: UDP
+          containerPort: 11000
+        readinessProbe:
+          exec:
+            command: ["fs_cli", "-x", "status", "|", "grep", "-q", "^UP"]
+          initialDelaySeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 5
+        livenessProbe:
+          exec:
+            command: ["fs_cli", "-x", "status", "|", "grep", "-q", "^UP"]
+          initialDelaySeconds: 15
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 5
+        volumeMounts:
+        - name: freeswitch-ramfs
+          mountPath: /volumes/freeswitch
+      volumes:
+      - name: freeswitch-ramfs
+        emptyDir:
+          medium: Memory
+      restartPolicy: Always
+
