@@ -4,7 +4,7 @@ metadata:
   name: kamailio
   labels:
     app: kamailio
-    project: valuphone
+    project: telephoneorg
     environment: production
 spec:
   replicas: 1
@@ -12,36 +12,35 @@ spec:
     metadata:
       labels:
         app: kamailio
-        project: valuphone
+        project: telephoneorg
         environment: production
-      annotations:
-        pod.beta.kubernetes.io/init-containers: |-
-          [
-              {
-                  "name": "kubewait",
-                  "image": "callforamerica/kubewait",
-                  "imagePullPolicy": "IfNotPresent",
-                  "args": ["rabbitmq-alpha", "rabbitmq-beta", "freeswitch"],
-                  "env": [
-                      {
-                          "name": "NAMESPACE",
-                          "valueFrom": {
-                              "fieldRef": {
-                                  "apiVersion": "v1",
-                                  "fieldPath": "metadata.namespace"
-                              }
-                          }
-                      }
-                  ]
-              }
-          ]
     spec:
       hostNetwork: true
-      nodeSelector:
-        kubernetes.io/hostname: saturn.valuphone.com
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: sip-proxy
+                operator: In
+                values:
+                - 'true'
+      initContainers:
+      - name: kubewait
+        image: telephoneorg/kubewait
+        imagePullPolicy: IfNotPresent
+        args:
+        - rabbitmq
+        - freeswitch
+        env:
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
       containers:
       - name: kamailio
-        image: callforamerica/kamailio
+        image: telephoneorg/kamailio
         imagePullPolicy: Always
         securityContext:
           capabilities:
@@ -53,25 +52,20 @@ spec:
             - SYS_NICE
             - SYS_RESOURCE
         env:
-        - name: KUBE_SEARCH_DOMAINS_ADD
-          valueFrom:
-            configMapKeyRef:
-              name: freeswitch
-              key: kube.search-domains.add
-        - name: KAMAILIO_AMQP_HOSTS
+        - name: RABBITMQ_HOSTS
           valueFrom:
             configMapKeyRef:
               name: kamailio
-              key: kamailio.amqp.hosts
+              key: rabbitmq.hosts
         - name: RABBITMQ_USER
           valueFrom:
             secretKeyRef:
-              name: rabbitmq-creds
+              name: rabbitmq
               key: rabbitmq.user
         - name: RABBITMQ_PASS
           valueFrom:
             secretKeyRef:
-              name: rabbitmq-creds
+              name: rabbitmq
               key: rabbitmq.pass
         - name: KAMAILIO_LOG_LEVEL
           valueFrom:
@@ -88,16 +82,16 @@ spec:
             configMapKeyRef:
               name: kamailio
               key: kamailio.enable-roles
-        - name: SYNC_FREESWITCH_SOURCE
+        - name: FREESWITCH_SYNC_SOURCE
           valueFrom:
             configMapKeyRef:
               name: kamailio
-              key: sync.freeswitch.source
-        - name: SYNC_FREESWITCH_ARGS
+              key: freeswitch.sync.source
+        - name: FREESWITCH_SYNC_ARGS
           valueFrom:
             configMapKeyRef:
               name: kamailio
-              key: sync.freeswitch.args
+              key: freeswitch.sync.args
         - name: KAMAILIO_SHM_MEMORY
           valueFrom:
             configMapKeyRef:
@@ -108,11 +102,6 @@ spec:
             configMapKeyRef:
               name: kamailio
               key: kamailio.pkg-memory
-        - name: KAMAILIO_CHILD_PROC
-          valueFrom:
-            configMapKeyRef:
-              name: kamailio
-              key: kamailio.child-proc
         ports:
         - name: sip-tcp
           containerPort: 5060
@@ -160,16 +149,18 @@ spec:
           successThreshold: 1
           failureThreshold: 5
         volumeMounts:
-        - name: volumes-ram
-          mountPath: /volumes/kamailio/dbtext
+        - name: db
+          mountPath: /volumes/kamailio/db
+          readOnly: false
         - name: tls
           mountPath: /volumes/kamailio/tls
-          readOnly: false
+          readOnly: true
       volumes:
-      - name: volumes-ram
+      - name: db
         emptyDir:
           medium: Memory
       - name: tls
         secret:
-          secretName: wss-valuphone-com-tls
+          secretName: wss-telephoneorg-com-tls
       restartPolicy: Always
+      dnsPolicy: ClusterFirstWithHostNet

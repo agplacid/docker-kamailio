@@ -1,8 +1,9 @@
 kubernetes/
+scripts/
+tasks/
+templates/
 tests/
 .*/
 .*
 *.md
-*.rst
-*.env
-Makefile
+docker-compose.yaml

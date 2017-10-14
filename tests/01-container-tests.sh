@@ -11,7 +11,7 @@ fi
 
 if [[ ! -z $LOG_TEST_PATTERN ]]; then
     echo::test "Log Pattern Test"
-    docker logs $NAME 2>/dev/null | grep -q "$LOG_TEST_PATTERN"
+    docker logs $NAME 2>&1 | grep -q "$LOG_TEST_PATTERN"
     if (($? == 0)); then
         echo::success "'$LOG_TEST_PATTERN' found"
     else

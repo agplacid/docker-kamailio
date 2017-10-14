@@ -1,7 +1,6 @@
 #!/bin/bash -l
 
 set -e
-# set -x
 
 [[ -f /etc/entrypoint ]] && . /etc/entrypoint
 [[ -f /etc/default/$APP ]] && . /etc/default/$APP
@@ -18,7 +17,7 @@ set -e
 : readonly ${KAMAILIO_MY_IP_ADDRESS:=$PUBLIC_IPV4}
 : readonly ${KAMAILIO_MY_WEBSOCKET_DOMAIN:=$DOMAIN_NAME}
 
-: readonly ${KAMAILIO_AMQP_HOSTS:=rabbitmq}
+: readonly ${RABBITMQ_HOSTS:=rabbitmq}
 
 : readonly ${RABBITMQ_USER:=guest}
 : readonly ${RABBITMQ_PASS:=guest}
@@ -30,50 +29,33 @@ set -e
 
 : readonly ${KAMAILIO_ENABLE_ROLES:=websockets,message}
 
-: readonly ${SYNC_FREESWITCH_SOURCE:=dns}
-: readonly ${SYNC_FREESWITCH_ARGS:=freeswitch}
-
 readonly LOG_LEVEL=$(kamailio::get-loglevel $KAMAILIO_LOG_LEVEL)
-readonly AMQP_HOSTS=($(kazoo::build-amqp-uris "$KAMAILIO_AMQP_HOSTS" 'kazoo'))
+readonly AMQP_HOSTS=($(kazoo::build-amqp-uris "$RABBITMQ_HOSTS" 'kazoo'))
 
 
 pushd /etc/kamailio
     log::m-info "Setting log level to: $LOG_LEVEL ..."
-    sed -i -r "/^debug /s/\w*$/$LOG_LEVEL/" local.cfg
+    sed -i "s/<LOG_LEVEL>/$LOG_LEVEL/" local.cfg
 
     if (( $KAMAILIO_MTU != 1500 )); then
         log::m-info "Changing MTU to $MTU"
-        sed "/udp4_raw_mtu/s/\b[[:digit:]]\+$/$MTU/" local.cfg
+        sed -i "/udp4_raw_mtu/s/\b[[:digit:]]\+$/$MTU/" local.cfg
     fi
 
     log::m-info "Rewriting local.cfg ..."
-    sed -i "/MY_HOSTNAME/s/\(MY_HOSTNAME\!\).*\(\!\)/\1$KAMAILIO_MY_HOSTNAME\2/" local.cfg
-    sed -i "/MY_IP_ADDRESS/s/\(MY_IP_ADDRESS\!\).*\(\!\)/\1$KAMAILIO_MY_IP_ADDRESS\2/" $_
-    sed -i "\|MY_AMQP_URL|s|\(MY_AMQP_URL\!\).*\(\!\)|\1${AMQP_HOSTS[0]}\2|" $_
-    sed -i "/MY_WEBSOCKET_DOMAIN/s/\(MY_WEBSOCKET_DOMAIN\!\).*\(\!\)/\1$KAMAILIO_MY_WEBSOCKET_DOMAIN\2/" $_
+    sed -i "s/<MY_HOSTNAME>/$KAMAILIO_MY_HOSTNAME/" local.cfg
+    sed -i "s/<MY_IP_ADDRESS>/$KAMAILIO_MY_IP_ADDRESS/" $_
+    sed -i "s|<MY_AMQP_URL>|${AMQP_HOSTS[0]}|" $_
+    sed -i "s/<MY_WEBSOCKET_DOMAIN>/$KAMAILIO_MY_WEBSOCKET_DOMAIN/" $_
 
     if (( ${#AMQP_HOSTS[@]} > 1 )); then
         log::m-info "Enabling secondary amqp server:  ${AMQP_HOSTS[1]} ..."
-        if grep -q '^# # #\!.*MY_SECONDARY_AMQP_URL' local.cfg; then
-            sed -i '/MY_SECONDARY_AMQP_URL/s/^# # //' local.cfg
-        fi
-        sed -i "\|\!MY_SECONDARY_AMQP_URL|s|\(MY_SECONDARY_AMQP_URL\!\).*\(\!\)|\1${AMQP_HOSTS[1]}\2|" local.cfg
-    else
-        if grep -q '^#\!.*MY_SECONDARY_AMQP_URL' local.cfg; then
-            sed -i '/MY_SECONDARY_AMQP_URL/s/^/# # /' local.cfg
-        fi
+        sed -i "s/<MY_AMQP_SECONDARY_URL>/${AMQP_HOSTS[1]}/" local.cfg
     fi
 
     if (( ${#AMQP_HOSTS[@]} > 2 )); then
         log::m-info "Enabling tertiary amqp server: ${AMQP_HOSTS[2]} ..."
-        if grep -q '^# # #\!.*MY_TERTIARY_AMQP_URL' local.cfg; then
-            sed -i '/MY_TERTIARY_AMQP_URL/s/^# # //' local.cfg
-        fi
-        sed -i "\|\!MY_TERTIARY_AMQP_URL|s|\(MY_TERTIARY_AMQP_URL\!\).*\(\!\)|\1${AMQP_HOSTS[2]}\2|" local.cfg
-    else
-        if grep -q '^#\!.*MY_TERTIARY_AMQP_URL' local.cfg; then
-            sed -i '/MY_TERTIARY_AMQP_URL/s/^/# # /' local.cfg
-        fi
+        sed -i "s/<MY_AMQP_TERTIARY_URL>/${AMQP_HOSTS[1]}/" local.cfg
     fi
 
     log::m-info "Enabling roles: ${KAMAILIO_ENABLE_ROLES} in local.cfg ..."
@@ -86,19 +68,16 @@ pushd /etc/kamailio
     popd
 
 
-log::m-info "Copying dbtext files to /volumes/$APP/dbtext/ ..."
-mkdir -p /volumes/$APP/dbtext
-cp -R /etc/$APP/dbtext/* $_/
-
-
-log::m-info "Syncing freeswitch servers ..."
-sync-freeswitch $SYNC_FREESWITCH_SOURCE "$SYNC_FREESWITCH_ARGS"
+if [ ! -f /etc/kamailio/db/kazoo.db ]; then
+    KazooDB -init /etc/kamailio/kazoodb.sql /etc/kamailio/db/kazoo.db
+    chown kamailio:kamailio /etc/kamailio/db/kazoo.db
+fi
 
 
 log::m-info "Setting ulimits ..."
 set-limits 'kamailio'
 
-if linux::cap::is-enabled; then
+if linux::cap::is-enabled 'sys_nice'; then
     log::m-info "Enabling real-time priority settings ..."
     sed -i '/Global Parameters/a \
 real_time = 7 \
@@ -124,20 +103,17 @@ fixattrs
 
 log::m-info "Building arguments ..."
 CMD_ARGS=("-DD")
-[[ ! -z $KAMAILIO_SHM_MEMORY ]] \
-    && CMD_ARGS+=("-m $KAMAILIO_SHM_MEMORY")
-
-[[ ! -z $KAMAILIO_PKG_MEMORY ]] \
-    && CMD_ARGS+=("-M $KAMAILIO_PKG_MEMORY")
-
-[[ ! -z $KAMAILIO_CHILD_PROC ]] \
-    && CMD_ARGS+=("-n $KAMAILIO_CHILD_PROC")
-
-[[ $KAMAILIO_LOG_COLOR = true ]] \
-    && CMD_ARGS+=("-e")
+[[ ! -z $KAMAILIO_SHM_MEMORY ]] && \
+    CMD_ARGS+=("-m $KAMAILIO_SHM_MEMORY")
+[[ ! -z $KAMAILIO_PKG_MEMORY ]] && \
+    CMD_ARGS+=("-M $KAMAILIO_PKG_MEMORY")
+[[ ! -z $KAMAILIO_CHILD_PROC ]] && \
+    CMD_ARGS+=("-n $KAMAILIO_CHILD_PROC")
+[[ $KAMAILIO_LOG_COLOR = true ]] && \
+    CMD_ARGS+=("-e")
 set -- ${CMD_ARGS[@]}
 
 
 log::m-info "Starting $APP ..."
 cd ~
-    exec kamailio "$@" 2>&1
+    exec kamailio "$@"

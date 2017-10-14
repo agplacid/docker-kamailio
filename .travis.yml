@@ -1,10 +1,18 @@
+addons:
+  apt:
+    packages:
+    - realpath
 language: python
+python:
+- "3.6"
 services: docker
 env:
   global:
-  - DOCKER_USER=callforamerica
+  - DOCKER_USER=joeblackwaslike
+  - DOCKER_ORG=telephoneorg
   # DOCKER_PASS
   - secure: "JP38dGYvREiS/hc7okkPzkVLqvb0cq30bfnOJxcLiaDJJvrb/s13kMUdT7Uf7asXTGB1atQR0nZfSfJCZbVi+sUal4EskeH25pjiVz2TURqAr5qpMxPeraASJj8r32FdgiaLcCcRuaArMN85DsDBd38MS6MT+CkiWo5HSB/VAtYMoy2xs7mcIxRaOJhhWRciQvkXYfpUVXNi/M6s+qzuz8Mj0QEFDVblFxxRtYqnaEZb5k7+4ZloUzZiKjVCe8AzdSbdrVJlqZbBf4PBluYtVYqTlSK7DD+S5vxnedh76MgiV6Cw1F40FdLjedsB4c4siO3WxtyXVsCOsqux4DcoSw5NG0svICvg+6W49+3burWDVTwdEcas1Gf1RRwVBQFrqcaHPWQzG9pvKZgNUM9phfEggm9jZh+ghu8//OTLiSUxbn2l+W7AVHA1Bhp8ieJhXFfbXtq4p70VRq4P+Zt0JIPAS0o2ScS6xYAc6nY633PO6e8J3cr8XZRN2YV0dS51y2fYDbWNjisliK/q5fN5O+SShccFSIjTZC3qRQDF/Qi6dYJha783RFVkh1FWdy4WzsxFcoxOzlHqFX5b9s8t50oUNKFaT/EKlFpQvgOTTaFl7VfcT+Q+TVO9FNzYY7SvK+XlHgTxycVZK2nwk1YOLFzqdhPpiAcrT/boFx+ry8g="
+
 notifications:
   email:
     on_success: never
@@ -16,20 +24,14 @@ notifications:
     on_failure: always
 
 before_install:
-- pip install --upgrade docker-compose
 - source scripts/ci/environment.sh
-- clone-deps rabbitmq freeswitch
-- pull-deps rabbitmq freeswitch
+- pip install --upgrade docker-compose
+- pip install invoke
 
-install: docker-compose build kamailio
-
-before_script:
-- docker-compose up -d
-- sleep 15
-- docker ps -a
-
+install: inv dc.build
 script: tests/run
 
 after_success:
 - ci-tag-build
 - hub-push
+- hub-update-readme

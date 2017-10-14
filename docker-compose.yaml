@@ -1,16 +1,14 @@
-version: '2.1'
+version: '2.2'
 services:
   kamailio:
     container_name: kamailio
     hostname: kamailio.valuphone.local
     build: .
-    image: callforamerica/kamailio:${TAG:-latest}
+    image: telephoneorg/kamailio:${TAG:-latest}
     environment:
       KAMAILIO_LOG_LEVEL: info
-      KAMAILIO_ENABLE_ROLES: websockets,message,presence_query,presence_sync,presence_notify_sync,registrar_sync
-      KAMAILIO_AMQP_HOSTS: rabbitmq-alpha.local,rabbitmq-beta.local
-      SYNC_FREESWITCH_SOURCE: dns
-      SYNC_FREESWITCH_ARGS: freeswitch.local
+      KAMAILIO_ENABLE_ROLES: websockets,message,presence_query,presence_notify_sync,registrar_sync
+      RABBITMQ_HOSTS: rabbitmq.local
     ports:
     - "5060-5061:5060-5061"
     - "5060:5060/udp"
@@ -18,10 +16,6 @@ services:
     - "5064-5065:5064-5065/udp"
     - "7000-7001:7000-7001"
     - "7000:7000/udp"
-    networks:
-      local:
-        aliases:
-        - kazoo.local
     cap_add:
     - IPC_LOCK
     - NET_ADMIN
@@ -29,47 +23,34 @@ services:
     - NET_BROADCAST
     - SYS_NICE
     - SYS_RESOURCE
-    depends_on:
-      rabbitmq-alpha:
-        condition: service_healthy
-      rabbitmq-beta:
-        condition: service_healthy
-      freeswitch:
-        condition: service_healthy
     networks:
       local:
         aliases:
         - kamailio.valuphone.local
-  rabbitmq-alpha:
-    container_name: rabbitmq-alpha
-    hostname: rabbitmq-alpha.local
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      freeswitch:
+        condition: service_healthy
+  rabbitmq:
+    container_name: rabbitmq
+    hostname: rabbitmq.local
     environment:
+      ERLANG_HOSTNAME: long
       ERLANG_COOKIE: test-cookie
-      RABBITMQ_USE_LONGNAME: 'true'
-    image: callforamerica/rabbitmq:latest
+    image: telephoneorg/rabbitmq:latest
     networks:
       local:
         aliases:
-        - rabbitmq-alpha.local
-  rabbitmq-beta:
-    container_name: rabbitmq-beta
-    hostname: rabbitmq-beta.local
-    environment:
-      ERLANG_COOKIE: test-cookie
-      RABBITMQ_USE_LONGNAME: 'true'
-    image: callforamerica/rabbitmq:latest
-    networks:
-      local:
-        aliases:
-        - rabbitmq-beta.local
+        - rabbitmq.local
   freeswitch:
     container_name: freeswitch
     hostname: freeswitch.local
-    image: callforamerica/freeswitch:latest
+    image: telephoneorg/freeswitch:latest
     environment:
+      ERLANG_HOSTNAME: long
       FREESWITCH_DISABLE_NAT_DETECTION: 'false'
-      FREESWITCH_RTP_START_PORT: 16384
-      FREESWITCH_RTP_END_PORT: 16484
+      FREESWITCH_RTP_PORT_RANGE: 16384-16484
       ERLANG_COOKIE: test-cookie
     ports:
     - "11000:10000"

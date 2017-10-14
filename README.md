@@ -1,20 +1,22 @@
-# Kamailio w/ Kubernetes fixes & manifests
+# Kamailio 5.x
+## w/ Kubernetes fixes & manifests
+[![Build Status](https://travis-ci.org/telephoneorg/docker-kamailio.svg?branch=master)](https://travis-ci.org/telephoneorg/docker-kamailio) [![Docker Pulls](https://img.shields.io/docker/pulls/telephoneorg/kamailio.svg)](https://hub.docker.com/r/telephoneorg/kamailio) [![Size/Layers](https://images.microbadger.com/badges/image/telephoneorg/kamailio.svg)](https://microbadger.com/images/telephoneorg/kamailio) [![Github Repo](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/telephoneorg/docker-kamailio)
 
-[![Build Status](https://travis-ci.org/sip-li/docker-kamailio.svg?branch=master)](https://travis-ci.org/sip-li/docker-kamailio) [![Docker Pulls](https://img.shields.io/docker/pulls/callforamerica/kamailio.svg)](https://hub.docker.com/r/callforamerica/kamailio) [![Size/Layers](https://images.microbadger.com/badges/image/callforamerica/kamailio.svg)](https://microbadger.com/images/callforamerica/kamailio)
 
 ## Maintainer
-Joe Black | <joe@valuphone.com> | [github](https://github.com/joeblackwaslike)
+Joe Black | <me@joeblack.nyc> | [github](https://github.com/joeblackwaslike)
 
 
 ## Description
-Minimal kamailio image with enhancements including running frequently accessed files off of a tmpfs volume.  This image uses a custom version of Debian Linux (Jessie) that I designed weighing in at ~22MB compressed.
+Minimal kamailio image with enhancements including running the database in ram.  This image uses a custom, minimal version of Debian Linux.
 
 
 ## Build Environment
-Build environment variables are often used in the build script to bump version numbers and set other options during the docker build phase.  Their values can be overridden using a build argument of the same name.
-* `KAMAILIO_VERSION`
+The build environment has been split off from this repo and now lives @ https://github.com/telephoneorg/kamailio-builder.  See the README.md file there for more details on the build environment.
+
+## Installation Environment
+The installation environment is used for configuring which modules are installed from our custom packages.
 * `KAMAILIO_INSTALL_MODS`
-* `KAZOO_CONFIGS_BRANCH`
 
 The following variables are standard in most of our dockerfiles to reduce duplication and make scripts reusable among different projects:
 * `APP`: kamailio
@@ -52,9 +54,9 @@ Run environment variables are used in the entrypoint script to render configurat
 All of our docker-* repos in github have CI pipelines that push to docker cloud/hub.  
 
 This image is available at:
-* [https://store.docker.com/community/images/callforamerica/kamailio](https://store.docker.com/community/images/callforamerica/kamailio)
-*  [https://hub.docker.com/r/callforamerica/kamailio](https://hub.docker.com/r/callforamerica/kamailio).
-* `docker pull callforamerica/kamailio`
+* [https://store.docker.com/community/images/telephoneorg/kamailio](https://store.docker.com/community/images/telephoneorg/kamailio)
+*  [https://hub.docker.com/r/telephoneorg/kamailio](https://hub.docker.com/r/telephoneorg/kamailio).
+* `docker pull telephoneorg/kamailio`
 
 To run:
 
@@ -70,14 +72,12 @@ docker run -d \
     -p "7000:7000/udp" \
     -e "KAMAILIO_LOG_LEVEL=info" \
     -e  "KAMAILIO_ENABLE_ROLES=websockets,message,presence_query,presence_sync,presence_notify_sync,registrar_sync" \
-    -e "KAMAILIO_AMQP_HOSTS=rabbitmq-alpha.local,rabbitmq-beta.local" \
-    -e "SYNC_FREESWITCH_SOURCE=dns" \
-    -e "SYNC_FREESWITCH_ARGS=freeswitch.local" \
+    -e "RABBITMQ_HOSTS=rabbitmq.local" \
     --cap-add IPC_LOCK \
     --cap-add SYS_NICE \
     --cap-add SYS_RESOURCE \
     --cap-add NET_RAW \
-    callforamerica/kamailio
+    telephoneorg/kamailio
 ```
 
 **NOTE:** Please reference the Run Environment section for the list of available environment variables.
@@ -106,12 +106,12 @@ Edit the manifests under `kubernetes/<environment>` to reflect your specific env
 
 Create a secret for the erlang cookie:
 ```bash
-kubectl create secret generic erlang-cookie --from-literal=erlang.cookie=$(LC_ALL=C tr -cd '[:alnum:]' < /dev/urandom | head -c 64)
+kubectl create secret generic erlang --from-literal=erlang.cookie=$(LC_ALL=C tr -cd '[:alnum:]' < /dev/urandom | head -c 64)
 ```
 
 Create a secret for the kamailio credentials:
 ```bash
-kubectl create secret generic kamailio-creds --from-literal=kamailio.user=$(sed $(perl -e "print int rand(99999)")"q;d" /usr/share/dict/words) --from-literal=kamailio.pass=$(LC_ALL=C tr -cd '[:alnum:]' < /dev/urandom | head -c 32)
+kubectl create secret generic kamailio --from-literal=kamailio.user=$(sed $(perl -e "print int rand(99999)")"q;d" /usr/share/dict/words) --from-literal=kamailio.pass=$(LC_ALL=C tr -cd '[:alnum:]' < /dev/urandom | head -c 32)
 ```
 
 Deploy kamailio:

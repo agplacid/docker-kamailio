@@ -4,13 +4,13 @@ metadata:
   name: kamailio
   labels:
     app: kamailio
-    project: valuphone
+    project: telephoneorg
     environment: production
 spec:
   clusterIP: None
   selector:
     app: kamailio
-    project: valuphone
+    project: telephoneorg
     environment: production
   ports:
   - name: sip-tcp

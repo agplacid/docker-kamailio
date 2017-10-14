@@ -7,13 +7,11 @@ metadata:
     project: valuphone
     environment: production
 data:
-  kube.search-domains.add: 'true'
   kamailio.log.level: info
   kamailio.log.color: 'true'
-  kamailio.amqp.hosts: rabbitmq-alpha,rabbitmq-beta
+  rabbitmq.hosts: rabbitmq
   kamailio.shm-memory: '128'
   kamailio.pkg-memory: '8'
-  kamailio.child-proc: '8'
   kamailio.enable-roles: websockets,message,tls,presence_query,presence_sync,presence_notify_sync,registrar_sync
-  sync.freeswitch.source: kubernetes
-  sync.freeswitch.args: freeswitch
+  freeswitch.sync.source: kubernetes
+  freeswitch.sync.args: freeswitch
