@@ -3,7 +3,7 @@ services:
   kamailio:
     container_name: kamailio
     hostname: kamailio.valuphone.local
-    build: .
+    build: images/kamailio
     image: telephoneorg/kamailio:${TAG:-latest}
     environment:
       KAMAILIO_LOG_LEVEL: info

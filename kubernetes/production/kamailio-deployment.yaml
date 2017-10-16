@@ -40,7 +40,7 @@ spec:
               fieldPath: metadata.namespace
       containers:
       - name: kamailio
-        image: telephoneorg/kamailio
+        image: telephoneorg/kamailio:latest
         imagePullPolicy: Always
         securityContext:
           capabilities:
@@ -136,14 +136,22 @@ spec:
             memory: 1Gi
         readinessProbe:
           exec:
-            command: ["kamctl", "monitor", "1", "|", "grep -q", "^Up"]
+            command:
+            - goss
+            - -g
+            - /goss/goss.yaml
+            - validate
           initialDelaySeconds: 10
           timeoutSeconds: 3
           successThreshold: 1
           failureThreshold: 5
         livenessProbe:
           exec:
-            command: ["kamctl", "monitor", "1", "|", "grep -q", "^Up"]
+            command:
+            - goss
+            - -g
+            - /goss/goss.yaml
+            - validate
           initialDelaySeconds: 10
           timeoutSeconds: 3
           successThreshold: 1

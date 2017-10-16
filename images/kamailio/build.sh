@@ -47,13 +47,15 @@ echo -e '
 #!define KAZOO_LOG_LEVEL <LOG_LEVEL>' >> /etc/kamailio/local.cfg
 
 log::m-info "Removing curl ..."
-apt-get purge -y --auto-remove curl jq
+apt-get purge -y --auto-remove curl
+
+
+# needed by kamctl monitor
+apt-get install -yqq ncurses-bin bsdmainutils
 
 
 log::m-info "Creating directories ..."
-mkdir -p \
-    /var/run/$APP \
-    /volumes/$APP/{tls,db}
+mkdir -p /volumes/$APP/{tls,db}
 
 ln -sf /volumes/$APP/tls /etc/kamailio/certs
 ln -sf /volumes/$APP/db /etc/kamailio/db

@@ -1,0 +1,29 @@
+process:
+  kamailio:
+    running: true
+port:
+  tcp:5060:
+    listening: true
+  tcp:5064:
+    listening: true
+  tcp:7000:
+    listening: true
+  udp:5060:
+    listening: true
+  udp:5064:
+    listening: true
+  udp:7000:
+    listening: true
+addr:
+  unix:///var/run/kamailio/kamailio_ctl:
+    reachable: true
+    timeout: 500
+  tcp://rabbitmq:5672:
+    reachable: true
+    timeout: 500
+  tcp://freeswitch:8031:
+    reachable: true
+    timeout: 500
+  udp://freeswitch:11000:
+    reachable: true
+    timeout: 500

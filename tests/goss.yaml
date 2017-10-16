@@ -1,0 +1,272 @@
+file:
+  /entrypoint:
+    exists: true
+    mode:
+      or:
+      - "0755"
+      - "0775"
+    size:
+      gt: 5
+    owner: root
+    group: root
+    filetype: file
+  /etc/fixattrs.d/20-kamailio-perms:
+    exists: true
+    mode: "0644"
+    size: 160
+    owner: root
+    group: root
+    filetype: file
+    contains:
+    - /volumes/kamailio/db true kamailio:kamailio 0755 0755
+    - /volumes/kamailio/tls true kamailio:kamailio 0700 0700
+    - /var/run/kamailio true kamailio:kamailio 0755 0755
+  /etc/kamailio/certs:
+    exists: true
+    mode: "0700"
+    owner: kamailio
+    group: kamailio
+    filetype: directory
+  /etc/kamailio/db:
+    exists: true
+    mode: "0755"
+    owner: kamailio
+    group: kamailio
+    filetype: directory
+  /etc/kamailio/db/kazoo.db:
+    exists: true
+    mode: "0644"
+    size:
+      gt: 500000
+    owner: kamailio
+    group: kamailio
+    filetype: file
+  /etc/kamailio/default.cfg:
+    exists: true
+    mode: "0644"
+    size:
+      gt: 25000
+    owner: kamailio
+    group: kamailio
+    filetype: file
+    contains:
+    - real_time = 7
+    - rt_prio = 70
+    - rt_policy = 2
+    - rt_timer1_prio = 70
+    - rt_timer1_policy = 2
+    - rt_timer2_prio = 70
+    - rt_timer2_policy = 2
+    - group = "kamailio"
+    - user = "kamailio"
+    - 'server_header = "Server: K"'
+    - 'user_agent_header = "User-Agent: K"'
+    - log_stderror = yes
+    - dns_use_search_list = no
+  /etc/kamailio/local.cfg:
+    exists: true
+    mode: "0644"
+    size:
+      gt: 4000
+    owner: kamailio
+    group: kamailio
+    filetype: file
+    contains:
+    - '#!substdef "!MY_HOSTNAME!kamailio.valuphone.local!g"'
+    - '#!substdef "!MY_IP_ADDRESS!172.19.0.4!g"'
+    - '#!substdef "!MY_AMQP_URL!kazoo://guest:guest@rabbitmq.local:5672!g"'
+    - '# # #!substdef "!MY_AMQP_SECONDARY_URL!<MY_AMQP_SECONDARY_URL>!g"'
+    - '# # #!substdef "!MY_AMQP_TERTIARY_URL!<MY_AMQP_TERTIARY_URL>!g"'
+    - '#!substdef "!MY_WEBSOCKET_DOMAIN!valuphone.local!g"'
+    - '#!define KAZOO_LOG_LEVEL L_INFO'
+    - '/^#\!trydef WEBSOCKETS_ROLE/'
+    - '/^#\!trydef MESSAGE_ROLE/'
+    - '/^#\!trydef REGISTRAR_SYNC_ROLE/'
+    - '/^#\!trydef PRESENCE_NOTIFY_SYNC_ROLE/'
+  /usr/lib/x86_64-linux-gnu/kamailio/modules/db_kazoo.so:
+    exists: true
+    mode: "0644"
+    size:
+      gt: 900000
+    owner: root
+    group: root
+    filetype: file
+  /usr/sbin/KazooDB:
+    exists: true
+    mode: "0755"
+    size:
+      gt: 900000
+    owner: root
+    group: root
+    filetype: file
+  /etc/ld.so.conf.d/x86_64-linux-gnu.conf:
+    exists: true
+    mode: "0644"
+    size:
+      gt: 90
+    owner: root
+    group: root
+    filetype: file
+    contains:
+    - '/usr/lib/x86_64-linux-gnu/kamailio'
+  /etc/kamailio/db/kazoo.db:
+    exists: true
+    mode: "0644"
+    size:
+      gt: 500000
+    owner: kamailio
+    group: kamailio
+    filetype: file
+  /etc/kamailio/presence-role.cfg:
+    exists: true
+    mode: "0644"
+    size:
+      gt: 10000
+    owner: kamailio
+    group: kamailio
+    filetype: file
+    contains:
+    - '# modparam("presence", "cseq_offset", 1)'
+  /etc/profile.d/50-kamailio-functions.sh:
+    exists: true
+    mode:
+      or:
+      - "0644"
+      - "0664"
+    size:
+      gt: 10
+    owner: root
+    group: root
+    filetype: file
+  /etc/security/limits.d/kamailio.limits.conf:
+    exists: true
+    mode:
+      or:
+      - "0644"
+      - "0664"
+    size:
+      gt: 1
+    owner: root
+    group: root
+    filetype: file
+  /goss:
+    exists: true
+    mode:
+      or:
+      - "0755"
+      - "0777"
+    owner: root
+    group: root
+    filetype: directory
+  /goss/docker_output.log:
+    exists: true
+    mode: "0644"
+    size:
+      gt: 1
+    owner: root
+    group: root
+    filetype: file
+    contains:
+    - KazooDB library version
+    - 'kz_amqp_subscribe(): creating empty routing key'
+    - /connection to ([a-zA-Z0-9_.-]+) opened/
+    - /nodes\|hearbeat from new node kamailio@([a-zA-Z0-9_.-]+)/
+  /goss/goss.yaml:
+    exists: true
+    mode: "0644"
+    size:
+      gt: 1
+    owner: root
+    group: root
+    filetype: file
+  /var/run/kamailio:
+    exists: true
+    mode: "0755"
+    owner: kamailio
+    group: kamailio
+    filetype: directory
+  /volumes/kamailio/db:
+    exists: true
+    mode: "0755"
+    owner: kamailio
+    group: kamailio
+    filetype: directory
+  /volumes/kamailio/tls:
+    exists: true
+    mode: "0700"
+    owner: kamailio
+    group: kamailio
+    filetype: directory
+package:
+  bsdmainutils:
+    installed: true
+  jq:
+    installed: true
+  kamailio:
+    installed: true
+    versions:
+    - 5.0.3+stretch+b1
+  kamailio-dbkazoo-modules:
+    installed: true
+    versions:
+    - 5.0.3+stretch+b1
+  kamailio-extra-modules:
+    installed: true
+    versions:
+    - 5.0.3+stretch+b1
+  kamailio-kazoo-configs:
+    installed: true
+    versions:
+    - 5.0.3+stretch+b1-4.2
+  kamailio-kazoo-modules:
+    installed: true
+    versions:
+    - 5.0.3+stretch+b1
+  kamailio-outbound-modules:
+    installed: true
+    versions:
+    - 5.0.3+stretch+b1
+  kamailio-presence-modules:
+    installed: true
+    versions:
+    - 5.0.3+stretch+b1
+  kamailio-tls-modules:
+    installed: true
+    versions:
+    - 5.0.3+stretch+b1
+  kamailio-websocket-modules:
+    installed: true
+    versions:
+    - 5.0.3+stretch+b1
+  ncurses-bin:
+    installed: true
+addr:
+  unix:///var/run/kamailio/kamailio_ctl:
+    reachable: true
+    timeout: 500
+port:
+  tcp:5060:
+    listening: true
+  tcp:5064:
+    listening: true
+  tcp:7000:
+    listening: true
+  udp:5060:
+    listening: true
+  udp:5064:
+    listening: true
+  udp:7000:
+    listening: true
+user:
+  kamailio:
+    exists: true
+    groups:
+    - kamailio
+    home: /var/run/kamailio
+    shell: /bin/false
+group:
+  kamailio:
+    exists: true
+process:
+  kamailio:
+    running: true

@@ -1,0 +1,24 @@
+addr:
+  unix:///var/run/kamailio/kamailio_ctl:
+    reachable: true
+    timeout: 500
+port:
+  tcp:5060:
+    listening: true
+  tcp:5064:
+    listening: true
+  tcp:7000:
+    listening: true
+  udp:5060:
+    listening: true
+  udp:5064:
+    listening: true
+  udp:7000:
+    listening: true
+process:
+  kamailio:
+    running: true
+command:
+  bash -c '(($(kamctl uptime | jq ".result.uptime") >= 1))':
+    exit-status: 0
+    timeout: 10000

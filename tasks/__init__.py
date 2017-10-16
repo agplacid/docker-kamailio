@@ -22,6 +22,7 @@ ns.configure(dict(
         tag='%s/%s:latest' % (
             os.getenv('DOCKER_ORG', os.getenv('DOCKER_USER', 'telephoneorg')), 'kamailio'
         ),
+        services=['kamailio'],
         shell='bash'
     ),
     kube=dict(
