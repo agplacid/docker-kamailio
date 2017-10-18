@@ -73,7 +73,7 @@ file:
     filetype: file
     contains:
     - '#!substdef "!MY_HOSTNAME!kamailio.valuphone.local!g"'
-    - '#!substdef "!MY_IP_ADDRESS!172.19.0.4!g"'
+    - '#!substdef "!MY_IP_ADDRESS!'
     - '#!substdef "!MY_AMQP_URL!kazoo://guest:guest@rabbitmq.local:5672!g"'
     - '# # #!substdef "!MY_AMQP_SECONDARY_URL!<MY_AMQP_SECONDARY_URL>!g"'
     - '# # #!substdef "!MY_AMQP_TERTIARY_URL!<MY_AMQP_TERTIARY_URL>!g"'
