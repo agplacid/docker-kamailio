@@ -39,12 +39,17 @@ pushd $_
     popd && rm -rf $OLDPWD
 
 
+log::m-info "Applying fixes ..."
 # needed to fix fatal error module param doesn't exist
 sed -i '/cseq_offset/s/\(^.*$\)/# \1/' /etc/kamailio/presence-role.cfg
 
 # add LOG_LEVEL to local.cfg
 echo -e '
 #!define KAZOO_LOG_LEVEL <LOG_LEVEL>' >> /etc/kamailio/local.cfg
+
+# only print verbose memory stags on quit when at debug log level
+sed -i '/^memlog/s/L_INFO/L_DBG/' /etc/kamailio/default.cfg
+
 
 log::m-info "Removing curl ..."
 apt-get purge -y --auto-remove curl
