@@ -35,7 +35,10 @@ file:
     filetype: symlink
   /etc/kamailio/db/kazoo.db:
     exists: true
-    mode: "0755"
+    mode:
+      or:
+      - "0755"
+      - "0644"
     size:
       gt: 500000
     owner: kamailio
