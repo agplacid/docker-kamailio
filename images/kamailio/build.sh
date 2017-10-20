@@ -59,11 +59,11 @@ apt-get purge -y --auto-remove curl
 apt-get install -yqq ncurses-bin bsdmainutils
 
 
-log::m-info "Creating directories ..."
+log::m-info "Creating directories and links ..."
+rm -rf /etc/kamailio/{certs,db}
 mkdir -p /volumes/$APP/{tls,db}
-
-ln -sf /volumes/$APP/tls /etc/kamailio/certs
-ln -sf /volumes/$APP/db /etc/kamailio/db
+ln -s /volumes/$APP/tls /etc/kamailio/certs
+ln -s /volumes/$APP/db /etc/kamailio/db
 
 
 log::m-info "Adding fixattr files ..."

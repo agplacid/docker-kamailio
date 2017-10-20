@@ -67,6 +67,12 @@ metadata:
     environment: testing
 spec:
   replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  minReadySeconds: 5
   template:
     metadata:
       labels:
@@ -193,10 +199,10 @@ data:
     bind_address = 0.0.0.0
 
     [cluster]
-    q={{ config.get('couchdb.shards', '2') }}
-    n={{ config.get('couchdb.replicas', '1') }}
-    r={{ config.get('couchdb.read-quorum', '1') }}
-    w={{ config.get('couchdb.write-quorum', '1') }}
+    q = {{ config.get('couchdb.shards', '3') }}
+    n = {{ config.get('couchdb.replicas', '1') }}
+    r = {{ config.get('couchdb.read-quorum', '1') }}
+    w = {{ config.get('couchdb.write-quorum', '1') }}
 
     [couch_httpd_auth]
     iterations = 1000
@@ -327,6 +333,12 @@ metadata:
 spec:
   serviceName: couchdb
   replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  minReadySeconds: 5
   template:
     metadata:
       labels:
@@ -477,8 +489,6 @@ spec:
   selector:
     app: freeswitch
   ports:
-  # - name: event-socket
-  #   port: 8021
   - name: mod-kazoo
     port: 8031
   - name: sip
@@ -494,6 +504,12 @@ metadata:
     environment: testing
 spec:
   replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  minReadySeconds: 5
   template:
     metadata:
       labels:
@@ -547,8 +563,6 @@ spec:
               name: freeswitch
               key: freeswitch.tls.enable
         ports:
-        # - name: event-socket
-        #   containerPort:  8021
         - name: mod-kazoo
           containerPort:  8031
         - name: sip
@@ -597,8 +611,6 @@ data:
   kamailio.shm-memory: '128'
   kamailio.pkg-memory: '8'
   kamailio.enable-roles: websockets,message,presence_query,presence_notify_sync,registrar_sync
-  freeswitch.sync.source: kubernetes
-  freeswitch.sync.args: freeswitch
 ---
 apiVersion: v1
 kind: Service

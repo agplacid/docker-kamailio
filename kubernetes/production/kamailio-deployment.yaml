@@ -168,7 +168,7 @@ spec:
           readOnly: false
         - name: tls
           mountPath: /volumes/kamailio/tls
-          readOnly: true
+          readOnly: false
       volumes:
       - name: db
         emptyDir:
