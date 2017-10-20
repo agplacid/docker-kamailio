@@ -50,6 +50,8 @@ echo -e '
 # only print verbose memory stags on quit when at debug log level
 sed -i '/^memlog/s/L_INFO/L_DBG/' /etc/kamailio/default.cfg
 
+# correct filenames for letsencrypt naming
+sed -i 's/key\.pem/tls.key/;s/cert\.pem/tls\.crt/' /etc/kamailio/tls.cfg
 
 log::m-info "Removing curl ..."
 apt-get purge -y --auto-remove curl
