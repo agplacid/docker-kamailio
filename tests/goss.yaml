@@ -161,7 +161,7 @@ file:
     contains:
     - KazooDB library version
     - 'kz_amqp_subscribe(): creating empty routing key'
-    - /connection to ([a-zA-Z0-9_.-]+) opened/
+    # - /connection to ([a-zA-Z0-9_.-]+) opened/
     # - hearbeat from new node kamailio
   /goss/goss.yaml:
     exists: true
