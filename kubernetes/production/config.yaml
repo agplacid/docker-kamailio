@@ -12,4 +12,5 @@ data:
   rabbitmq.hosts: rabbitmq
   kamailio.shm-memory: '128'
   kamailio.pkg-memory: '8'
-  kamailio.enable-roles: websockets,message,tls,presence_query,presence_notify_sync,registrar_sync
+  # kamailio.enable-roles: websockets,message,tls,presence_query,presence_notify_sync,registrar_sync
+  kamailio.enable-roles: websockets,message,presence_query,presence_notify_sync,registrar_sync

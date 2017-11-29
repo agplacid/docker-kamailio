@@ -2,10 +2,10 @@ import os
 
 from invoke import task, Collection
 
-from . import test, dc, kube
+from . import test, dc, kube, hub
 
 
-collections = [test, dc, kube]
+collections = [test, dc, kube, hub]
 
 ns = Collection()
 for c in collections:
@@ -25,7 +25,10 @@ ns.configure(dict(
         services=['kamailio'],
         shell='bash'
     ),
+    hub=dict(
+        images=['kamailio']
+    ),
     kube=dict(
-        environment='testing'
+        environment='production'
     )
 ))

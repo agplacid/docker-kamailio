@@ -2,9 +2,9 @@ version: '2.3'
 services:
   kamailio:
     container_name: kamailio
-    hostname: kamailio.valuphone.local
+    hostname: kamailio.telephone.local
     build: images/kamailio
-    image: telephoneorg/kamailio:${TAG:-latest}
+    image: telephoneorg/kamailio:${DOCKER_TAG:-latest}
     environment:
       KAMAILIO_LOG_LEVEL: info
       KAMAILIO_ENABLE_ROLES: websockets,message,presence_query,presence_notify_sync,registrar_sync
@@ -26,11 +26,9 @@ services:
     networks:
       local:
         aliases:
-        - kamailio.valuphone.local
+        - kamailio.telephone.local
     depends_on:
       rabbitmq:
-        condition: service_healthy
-      freeswitch:
         condition: service_healthy
   rabbitmq:
     container_name: rabbitmq
@@ -43,30 +41,5 @@ services:
       local:
         aliases:
         - rabbitmq.local
-  freeswitch:
-    container_name: freeswitch
-    hostname: freeswitch.local
-    image: telephoneorg/freeswitch:latest
-    environment:
-      ERLANG_HOSTNAME: long
-      FREESWITCH_DISABLE_NAT_DETECTION: 'false'
-      FREESWITCH_RTP_PORT_RANGE: 16384-16484
-      ERLANG_COOKIE: test-cookie
-    ports:
-    - "11000:10000"
-    - "11000:10000/udp"
-    - "16384-16484:16384-16484/udp"
-    - "8031:8031"
-    networks:
-      local:
-        aliases:
-        - freeswitch.local
-    cap_add:
-    - IPC_LOCK
-    - NET_ADMIN
-    - NET_RAW
-    - NET_BROADCAST
-    - SYS_NICE
-    - SYS_RESOURCE
 networks:
   local:

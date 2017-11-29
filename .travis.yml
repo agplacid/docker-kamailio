@@ -32,6 +32,5 @@ install: inv dc.build
 script: inv test
 
 after_success:
-- ci-tag-build
-- hub-push
-- hub-update-readme
+- inv hub.push
+- inv hub.update-readme

@@ -108,12 +108,12 @@ spec:
           valueFrom:
             secretKeyRef:
               name: rabbitmq
-              key: rabbitmq.user
+              key: user
         - name: RABBITMQ_PASS
           valueFrom:
             secretKeyRef:
               name: rabbitmq
-              key: rabbitmq.pass
+              key: pass
         - name: KAMAILIO_LOG_LEVEL
           valueFrom:
             configMapKeyRef:
@@ -129,16 +129,6 @@ spec:
             configMapKeyRef:
               name: kamailio
               key: kamailio.enable-roles
-        - name: FREESWITCH_SYNC_SOURCE
-          valueFrom:
-            configMapKeyRef:
-              name: kamailio
-              key: freeswitch.sync.source
-        - name: FREESWITCH_SYNC_ARGS
-          valueFrom:
-            configMapKeyRef:
-              name: kamailio
-              key: freeswitch.sync.args
         - name: KAMAILIO_SHM_MEMORY
           valueFrom:
             configMapKeyRef:
