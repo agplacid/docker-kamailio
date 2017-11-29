@@ -39,6 +39,10 @@ pushd $_
     popd && rm -rf $OLDPWD
 
 
+# fixes
+sed -i '/cseq_offset/s/^/# /' /etc/kamailio/presence-role.cfg
+
+
 log::m-info "Removing curl ..."
 apt-get purge -y --auto-remove curl
 

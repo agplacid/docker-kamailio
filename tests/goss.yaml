@@ -72,13 +72,13 @@ file:
     group: kamailio
     filetype: file
     contains:
-    - '#!substdef "!MY_HOSTNAME!kamailio.valuphone.local!g"'
+    - '#!substdef "!MY_HOSTNAME!kamailio.telephone.local!g"'
     - '#!substdef "!MY_IP_ADDRESS!'
     - '#!substdef "!MY_AMQP_URL!kazoo://guest:guest@rabbitmq.local:5672!g"'
     - '# # #!substdef "!MY_AMQP_SECONDARY_URL!<MY_AMQP_SECONDARY_URL>!g"'
     - '# # #!substdef "!MY_AMQP_TERTIARY_URL!<MY_AMQP_TERTIARY_URL>!g"'
-    - '#!substdef "!MY_WEBSOCKET_DOMAIN!valuphone.local!g"'
-    - '#!define KAZOO_LOG_LEVEL L_INFO'
+    - '#!substdef "!MY_WEBSOCKET_DOMAIN!telephone.local!g"'
+    # - '#!define KAZOO_LOG_LEVEL L_INFO'
     - '/^#\!trydef WEBSOCKETS_ROLE/'
     - '/^#\!trydef MESSAGE_ROLE/'
     - '/^#\!trydef REGISTRAR_SYNC_ROLE/'
@@ -162,7 +162,7 @@ file:
     - KazooDB library version
     - 'kz_amqp_subscribe(): creating empty routing key'
     - /connection to ([a-zA-Z0-9_.-]+) opened/
-    - /nodes\|hearbeat from new node kamailio@([a-zA-Z0-9_.-]+)/
+    # - hearbeat from new node kamailio
   /goss/goss.yaml:
     exists: true
     mode: "0644"
