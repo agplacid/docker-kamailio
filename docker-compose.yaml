@@ -1,8 +1,8 @@
-version: '2.3'
+version: '3'
 services:
   kamailio:
     container_name: kamailio
-    hostname: kamailio.telephone.local
+    hostname: kamailio.local
     build: images/kamailio
     image: telephoneorg/kamailio:${DOCKER_TAG:-latest}
     environment:
@@ -26,7 +26,7 @@ services:
     networks:
       local:
         aliases:
-        - kamailio.telephone.local
+        - kamailio.local
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -35,7 +35,7 @@ services:
     hostname: rabbitmq.local
     environment:
       ERLANG_HOSTNAME: long
-      ERLANG_COOKIE: test-cookie
+      ERLANG_COOKIE: change-me
     image: telephoneorg/rabbitmq:latest
     networks:
       local:
