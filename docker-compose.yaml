@@ -2,13 +2,13 @@ version: '3'
 services:
   kamailio:
     container_name: kamailio
-    hostname: kamailio.local
+    hostname: kamailio.kazoo
     build: images/kamailio
     image: telephoneorg/kamailio:${DOCKER_TAG:-latest}
     environment:
       KAMAILIO_LOG_LEVEL: info
       KAMAILIO_ENABLE_ROLES: websockets,message,presence_query,presence_notify_sync,registrar_sync
-      RABBITMQ_HOSTS: rabbitmq.local
+      RABBITMQ_HOSTS: rabbitmq.kazoo
     ports:
     - "5060-5061:5060-5061"
     - "5060:5060/udp"
@@ -24,22 +24,22 @@ services:
     - SYS_NICE
     - SYS_RESOURCE
     networks:
-      local:
+      kazoo:
         aliases:
-        - kamailio.local
+        - kamailio.kazoo
     depends_on:
       rabbitmq:
         condition: service_healthy
   rabbitmq:
     container_name: rabbitmq
-    hostname: rabbitmq.local
+    hostname: rabbitmq.kazoo
     environment:
       ERLANG_HOSTNAME: long
       ERLANG_COOKIE: change-me
     image: telephoneorg/rabbitmq:latest
     networks:
-      local:
+      kazoo:
         aliases:
-        - rabbitmq.local
+        - rabbitmq.kazoo
 networks:
-  local:
+  kazoo:
